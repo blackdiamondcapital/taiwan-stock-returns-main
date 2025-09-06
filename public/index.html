@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantGem 報酬引擎</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <!-- 引入 Chart.js 圖表庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 繼承原有的科技感配色系統 */
+        :root {
+            --primary-cyan: #00d4ff;
+            --primary-magenta: #ff0080;
+            --primary-green: #00ff88;
+            --primary-orange: #ffaa00;
+            --primary-red: #ff4757;
+            
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #1a1f2e;
+            --bg-tertiary: #2a3441;
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --bg-card: rgba(26, 31, 46, 0.8);
+            
+            --text-primary: #ffffff;
+            --text-secondary: #b3d9ff;
+            --text-muted: #7a8ba3;
+            
+            --success: #00ff88;
+            --error: #ff4444;
+            --warning: #ffaa00;
+            --info: #00d4ff;
+            
+            --border-primary: rgba(0, 212, 255, 0.3);
+            --border-secondary: rgba(255, 255, 255, 0.1);
+            --shadow-glow: 0 0 20px rgba(0, 212, 255, 0.3);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+            
+            --gradient-primary: linear-gradient(135deg, var(--primary-cyan), var(--primary-magenta));
+            --gradient-card: linear-gradient(145deg, rgba(26, 31, 46, 0.9), rgba(42, 52, 65, 0.7));
+            --gradient-button: linear-gradient(135deg, var(--primary-cyan), var(--primary-magenta));
+            --gradient-success: linear-gradient(135deg, #00ff88, #00d4ff);
+            --gradient-danger: linear-gradient(135deg, #ff4757, #ff0080);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 0, 128, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(0, 255, 136, 0.2) 0%, transparent 50%),
+                linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #0f1419 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 主容器 */
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 頭部 */
+        .app-header {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 0.75rem 1rem; /* compact header */
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 狀態指示器 */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid var(--border-secondary);
+            border-radius: 999px;
+            background: rgba(26,31,46,0.6);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0,0,0,0.35);
+        }
+        .status-dot.loading { background: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+        .status-dot.connected { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+        .status-dot.error { background: #ff4757; box-shadow: 0 0 8px #ff4757; }
+
+        /* 日期選擇器 */
+        .date-picker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 8px;
+        }
+        .date-picker input[type="date"] {
+            background: rgba(26,31,46,0.6);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        .asof-badge {
+            margin-left: 10px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-secondary);
+            color: var(--text-secondary);
+            background: rgba(26,31,46,0.5);
+        }
+        .asof-badge.warning {
+            color: #ffbb33;
+            border-color: #ffbb33;
+            background: rgba(255,187,51,0.12);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-title i {
+            font-size: 1.5rem;
+            color: var(--primary-cyan);
+            filter: drop-shadow(0 0 8px var(--primary-cyan));
+        }
+
+        /* 主導航 */
+        .main-nav {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-secondary);
+            padding: 0 1rem; /* compact nav */
+            position: sticky;
+            top: 56px; /* smaller offset due to compact header */
+            z-index: 90;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 1rem; /* compact gap */
+            padding: 0.5rem 0; /* compact padding */
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95rem;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .nav-item.active {
+            color: var(--text-primary);
+            background: var(--gradient-primary);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        /* 主內容區 */
+        .main-content {
+            flex: 1;
+            padding: 1.25rem; /* compact content padding */
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* 統計卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem; /* compact gap */
+            margin-bottom: 1.25rem; /* compact spacing */
+        }
+
+        .stat-card {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1rem; /* compact card padding */
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            cursor: default;
+            display: flex;            /* align children vertically */
+            flex-direction: column;  /* stack content */
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-primary);
+            opacity: 0.05;
+            transition: left 0.3s ease;
+        }
+
+        .stat-card:hover::before {
+            left: 0;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.2);
+            border-color: var(--primary-cyan);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gradient-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .stat-trend.up {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--success);
+        }
+
+        .stat-trend.down {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--primary-red);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-subvalue {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+            color: var(--success);
+        }
+
+        .stat-subinfo {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .stat-subinfo .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.3);
+        }
+        .stat-subinfo .muted { color: var(--text-muted); }
+
+        .sparkline {
+            width: 100%;
+            height: 32px;
+        }
+        .sparkline svg {
+            width: 100%;
+            height: 32px;
+            display: block;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: auto;        /* push label to the bottom for alignment */
+        }
+
+        /* 篩選控制面板 */
+        .filter-panel {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1rem; /* compact filter panel */
+            margin-bottom: 1.25rem; /* compact spacing */
+        }
+
+        /* 預設（總覽）僅顯示市場類別，其它隱藏；在 body 加上 .show-all-filters 時顯示全部 */
+        .filter-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .filter-controls .filter-group.overview-hide { display: none; }
+        body.show-all-filters .filter-controls .filter-group.overview-hide { display: flex; flex-direction: column; }
+
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .filter-input {
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        /* 排行榜表格 */
+        .ranking-table-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background: rgba(0, 212, 255, 0.03);
+        }
+
+        .table-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-icon, .btn-primary {
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-icon:hover, .btn-primary:hover {
+            border-color: var(--primary-cyan);
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--primary-cyan);
+        }
+
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .ranking-table thead {
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .ranking-table th {
+            padding: 1rem;
+            text-align: left;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid var(--border-secondary);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .ranking-table th:hover {
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .sort-indicator {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .ranking-table th.sorted .sort-indicator {
+            opacity: 1;
+            color: var(--primary-cyan);
+        }
+
+
+        .ranking-table tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .ranking-table tbody tr:hover {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .ranking-table td {
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            vertical-align: middle;
+        }
+
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .rank-badge.gold {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+        }
+
+        .rank-badge.silver {
+            background: linear-gradient(135deg, #C0C0C0, #808080);
+            color: #000;
+            box-shadow: 0 0 15px rgba(192, 192, 192, 0.5);
+        }
+
+        .rank-badge.bronze {
+            background: linear-gradient(135deg, #CD7F32, #8B4513);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(205, 127, 50, 0.5);
+        }
+
+        .stock-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .stock-symbol {
+            font-weight: 700;
+            color: var(--primary-cyan);
+            text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+
+        .stock-name {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .return-value {
+            font-weight: 600;
+            font-family: 'Monaco', 'Consolas', monospace;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .return-value.positive {
+            color: var(--success);
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+        }
+
+        .return-value.negative {
+            color: var(--primary-red);
+            text-shadow: 0 0 8px rgba(255, 71, 87, 0.3);
+        }
+
+        /* 時間範圍選擇器 */
+        .period-selector {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 10px;
+            padding: 0.25rem;
+        }
+
+        .period-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .period-btn:hover {
+            color: var(--text-primary);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .period-btn.active {
+            color: var(--text-primary);
+            background: var(--gradient-primary);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        /* 圖表容器 */
+        .chart-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .chart-placeholder {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .chart-placeholder i {
+            font-size: 3rem;
+            color: var(--primary-cyan);
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* 分析工具 */
+        .analysis-section {
+            margin-bottom: 2rem;
+        }
+        .analysis-tools {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .tool-card {
+            background: var(--gradient-card);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+        .tool-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        .tool-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .risk-meter {
+            width: 100%;
+            height: 20px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .risk-level {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #fff;
+            transition: width 0.5s ease;
+        }
+        .risk-level.low { background: var(--gradient-success); width: 25%; }
+        .risk-level.medium { background: linear-gradient(135deg, var(--warning), var(--primary-green)); width: 50%; }
+        .risk-level.high { background: var(--gradient-danger); width: 75%; }
+        #calculatorResult {
+            color: var(--primary-cyan);
+            font-weight: bold;
+            margin-top: 0.5rem;
+            min-height: 1.2em;
+        }
+
+
+        /* 熱力圖樣式 */
+        .heatmap-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-card);
+        }
+
+        .heatmap-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+        }
+
+        .legend-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .legend-scale {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 8px rgba(0,0,0,0.25) inset;
+        }
+
+        .legend-item.negative-high .legend-color {
+            background: linear-gradient(135deg, #ff4757, #cc0000);
+        }
+
+        .legend-item.negative-mid .legend-color {
+            background: linear-gradient(135deg, #ff8888, #ff4757);
+        }
+
+        .legend-item.neutral .legend-color {
+            background: linear-gradient(135deg, #666666, #888888);
+        }
+
+        .legend-item.positive-mid .legend-color {
+            background: linear-gradient(135deg, #88ff88, #00ff88);
+        }
+
+        .legend-item.positive-high .legend-color {
+            background: linear-gradient(135deg, #00ff88, #00cc44);
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 4px;
+            min-height: 300px;
+            padding: 1.25rem;
+            background:
+                radial-gradient(1200px 400px at 10% 0%, rgba(0,212,255,0.06), transparent 60%),
+                radial-gradient(800px 300px at 90% 100%, rgba(255,0,128,0.05), transparent 60%),
+                rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        /* 熱力圖標題列與控制按鈕加強樣式（不影響排行榜表頭） */
+        .heatmap-container .table-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background:
+                linear-gradient(135deg, rgba(0,212,255,0.08), rgba(255,0,128,0.06));
+        }
+        .heatmap-container .table-title {
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .heatmap-container .table-title i {
+            color: var(--primary-cyan);
+            filter: drop-shadow(0 0 6px rgba(0,212,255,0.4));
+        }
+
+        /* 強化更新按鈕（僅熱力圖區） */
+        .btn-accent {
+            background: var(--gradient-button);
+            color: #0b1020;
+            border-color: transparent;
+            box-shadow: 0 6px 18px rgba(0,212,255,0.25);
+        }
+        .btn-accent:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(0,212,255,0.35);
+            color: #0b1020;
+        }
+
+        .heatmap-cell.positive-high {
+            background: linear-gradient(135deg, #dc2626, #991b1b);
+            color: white;
+        }
+
+        .heatmap-cell.positive-mid {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+        }
+
+        .heatmap-cell.neutral {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+
+        .heatmap-cell.negative-mid {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+
+        .heatmap-cell.negative-high {
+            background: linear-gradient(135deg, #15803d, #166534);
+            color: white;
+        }
+
+        .cell-symbol {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell-return {
+            font-size: 0.625rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 2px;
+        }
+
+        .heatmap-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary-cyan);
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .heatmap-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-secondary);
+            background: rgba(0, 212, 255, 0.03);
+        }
+
+        .stat-summary {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-summary:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary-cyan);
+        }
+
+        .stat-summary.positive {
+            border-left: 4px solid var(--success);
+        }
+
+        .stat-summary.negative {
+            border-left: 4px solid var(--primary-red);
+        }
+
+        .stat-summary.neutral {
+            border-left: 4px solid var(--text-muted);
+        }
+
+        .stat-summary.average {
+            border-left: 4px solid var(--info);
+        }
+
+        .stat-summary .stat-icon {
+            font-size: 1.5rem;
+        }
+
+        .stat-summary .stat-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-summary .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-summary .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .header-content, .main-nav, .main-content {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .stats-grid, .filter-controls, .analysis-tools {
+                grid-template-columns: 1fr;
+            }
+            .ranking-table {
+                display: block;
+                overflow-x: auto;
+            }
+            .nav-container {
+                overflow-x: auto;
+                gap: 1rem;
+            }
+            .heatmap-grid {
+                grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+                gap: 2px;
+            }
+            .legend-scale {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .heatmap-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 頭部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>QuantGem 報酬引擎</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i>
+                        重新整理
+                    </button>
+                    <div class="date-picker">
+                        <i class="far fa-calendar-alt"></i>
+                        <input type="date" id="datePicker" />
+                    </div>
+                    <span id="asOfBadge" class="asof-badge" style="display:none"></span>
+                    <div class="status-indicator" id="apiStatus">
+                        <span class="status-dot loading" id="apiStatusDot"></span>
+                        <span id="apiStatusText">等待載入</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主導航 -->
+        <nav class="main-nav">
+            <div class="nav-container">
+                <button class="nav-item active" data-view="overview">
+                    <i class="fas fa-tachometer-alt"></i>
+                    總覽
+                </button>
+                <button class="nav-item" data-view="ranking">
+                    <i class="fas fa-trophy"></i>
+                    排行榜
+                </button>
+                <button class="nav-item" data-view="analysis">
+                    <i class="fas fa-chart-bar"></i>
+                    深度分析
+                </button>
+                <button class="nav-item" data-view="comparison">
+                    <i class="fas fa-balance-scale"></i>
+                    比較工具
+                </button>
+                <button class="nav-item" data-view="alerts">
+                    <i class="fas fa-bell"></i>
+                    警示設定
+                </button>
+            </div>
+        </nav>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <!-- 篩選控制面板（移至最前） -->
+            <div class="filter-panel">
+                <div class="filter-header">
+                    <div class="filter-title">
+                        <i class="fas fa-filter"></i>
+                        篩選條件
+                    </div>
+                    <div class="period-selector">
+                        <button class="period-btn active" data-period="daily">日</button>
+                        <button class="period-btn" data-period="weekly">週</button>
+                        <button class="period-btn" data-period="monthly">月</button>
+                        <button class="period-btn" data-period="quarterly">季</button>
+                        <button class="period-btn" data-period="yearly">年</button>
+                    </div>
+                </div>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label">市場類別</label>
+                        <select class="filter-input" id="marketFilter">
+                            <option value="all">全部市場</option>
+                            <option value="listed">上市</option>
+                            <option value="otc">上櫃</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="industryGroup">
+                        <label class="filter-label">產業類別</label>
+                        <select class="filter-input" id="industryFilter">
+                            <option value="all">全部產業</option>
+                            <option value="semiconductor">半導體</option>
+                            <option value="finance">金融保險</option>
+                            <option value="shipping">航運業</option>
+                            <option value="steel">鋼鐵工業</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="returnGroup">
+                        <label class="filter-label">報酬率範圍</label>
+                        <select class="filter-input" id="returnFilter">
+                            <option value="all">全部</option>
+                            <option value="top10">前10%</option>
+                            <option value="positive">正報酬</option>
+                            <option value="negative">負報酬</option>
+                            <option value="extreme">極端值 (±20%)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="volumeGroup">
+                        <label class="filter-label">成交量門檻</label>
+                        <select class="filter-input" id="volumeFilter">
+                            <option value="all">全部</option>
+                            <option value="10000">&gt; 10000張</option>
+                            <option value="1000">&gt; 1000張</option>
+                            <option value="100">&gt; 100張</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 統計卡片 -->
+            <div class="stats-grid">
+                <div class="stat-card" id="cardRising">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-arrow-trend-up"></i>
+                        </div>
+                        <div class="stat-trend up" id="risingTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            12.5%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="risingStocks">156</div>
+                    <div class="stat-subinfo" id="risingSubinfo">
+                        <span><span class="dot" style="background:#22c55e"></span>A/D 1.20</span>
+                        <span class="muted">>2%: 65</span>
+                        <span class="muted"><-2%: 23</span>
+                    </div>
+                    <div class="sparkline" id="sparkRising"></div>
+                    <div class="stat-label">今日上漲股票數</div>
+                </div>
+
+                <div class="stat-card" id="cardTopReturn">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <div class="stat-trend up" id="topReturnTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            28.3%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="topStock">2330.TW</div>
+                    <div class="stat-subinfo" id="topReturnSubinfo">
+                        <span><span class="dot" style="background:#00d4ff"></span>半導體</span>
+                        <span class="muted">當月成交值前10</span>
+                        <span class="muted">波動: 中</span>
+                    </div>
+                    <div class="sparkline" id="sparkTop"></div>
+                    <div class="stat-label">本月最佳報酬</div>
+                </div>
+
+                <div class="stat-card" id="cardAvgReturn">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div class="stat-trend down" id="avgReturnTrend">
+                            <i class="fas fa-arrow-down"></i>
+                            3.2%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="avgReturn">8.7%</div>
+                    <div class="stat-subinfo" id="avgReturnSubinfo">
+                        <span><span class="dot" style="background:#888"></span>相對大盤 +0.8%</span>
+                        <span class="muted">分位：74%</span>
+                    </div>
+                    <div class="sparkline" id="sparkAvg"></div>
+                    <div class="stat-label">市場平均報酬率</div>
+                </div>
+
+                <div class="stat-card" id="cardNewHigh">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                         <div class="stat-trend up" id="newHighTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            新高
+                        </div>
+                    </div>
+                    <div class="stat-value" id="newHighStocks">23</div>
+                    <div class="stat-subinfo" id="newHighSubinfo">
+                        <span><span class="dot" style="background:#ff0080"></span>淨新高 +12</span>
+                        <span class="muted">52週新高：9</span>
+                    </div>
+                    <div class="sparkline" id="sparkHigh"></div>
+                    <div class="stat-label">突破新高股票</div>
+                </div>
+
+                <!-- 新增四張（僅用價格/成交量） -->
+                <div class="stat-card" id="cardAboveMA60">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-wave-square"></i>
+                        </div>
+                        <div class="stat-trend up" id="ma60Trend">
+                            <i class="fas fa-arrow-up"></i>
+                            近似
+                        </div>
+                    </div>
+                    <div class="stat-value" id="aboveMA60">--%</div>
+                    <div class="stat-subinfo" id="aboveMA60Sub">
+                        <span><span class="dot" style="background:#22c55e"></span>MA20：--%</span>
+                        <span class="muted">雙站上：--%</span>
+                    </div>
+                    <div class="sparkline" id="sparkMA"></div>
+                    <div class="stat-label">站上60日線比例（近似）</div>
+                </div>
+
+                <div class="stat-card" id="cardVolSurgeUp">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="stat-trend up" id="volSurgeTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            放量
+                        </div>
+                    </div>
+                    <div class="stat-value" id="volSurgeUp">--</div>
+                    <div class="stat-subinfo" id="volSurgeSub">
+                        <span><span class="dot" style="background:#00d4ff"></span>中位倍數：--x</span>
+                        <span class="muted">>2x：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolSurge"></div>
+                    <div class="stat-label">上漲且放量家數</div>
+                </div>
+
+                <!-- 新增：雙站上比例（同時站上 MA20 與 MA60） -->
+                <div class="stat-card" id="cardBothAbove">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-arrows-turn-to-dots"></i>
+                        </div>
+                        <div class="stat-trend up" id="bothAboveTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            趨勢
+                        </div>
+                    </div>
+                    <div class="stat-value" id="bothAbovePct">--%</div>
+                    <div class="stat-subinfo" id="bothAboveSub">
+                        <span><span class="dot" style="background:#22c55e"></span>MA20：--%</span>
+                        <span class="muted">MA60：--%</span>
+                    </div>
+                    <div class="sparkline" id="sparkBothAbove"></div>
+                    <div class="stat-label">雙站上比例</div>
+                </div>
+
+                <!-- 新增：放量強度（中位倍數） -->
+                <div class="stat-card" id="cardVolMedian">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-signal"></i>
+                        </div>
+                        <div class="stat-trend up" id="volMedianTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            強度
+                        </div>
+                    </div>
+                    <div class="stat-value" id="medianVolMultiplier">--x</div>
+                    <div class="stat-subinfo" id="medianVolSub">
+                        <span><span class="dot" style="background:#00d4ff"></span>>1.5x：--</span>
+                        <span class="muted">>2x：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolMedian"></div>
+                    <div class="stat-label">放量強度</div>
+                </div>
+
+                <div class="stat-card" id="cardUpDownVol">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-column"></i>
+                        </div>
+                        <div class="stat-trend up" id="udvTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            量比
+                        </div>
+                    </div>
+                    <div class="stat-value" id="upDownVol">--</div>
+                    <div class="stat-subinfo" id="upDownVolSub">
+                        <span><span class="dot" style="background:#22c55e"></span>上漲量：--</span>
+                        <span class="muted">下跌量：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkUDV"></div>
+                    <div class="stat-label">上/下跌量比</div>
+                </div>
+
+                <div class="stat-card" id="cardVolatility">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-area"></i>
+                        </div>
+                        <div class="stat-trend down" id="volatilityTrend">
+                            <i class="fas fa-arrow-down"></i>
+                            中性
+                        </div>
+                    </div>
+                    <div class="stat-value" id="marketVolatility">--%</div>
+                    <div class="stat-subinfo" id="volatilitySub">
+                        <span><span class="dot" style="background:#f97316"></span>分位：--%</span>
+                        <span class="muted">高波動家數：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolatility"></div>
+                    <div class="stat-label">市場波動溫度計</div>
+                </div>
+            </div>
+
+
+            <!-- 報酬率熱力圖 -->
+            <div class="heatmap-container">
+                <div class="table-header">
+                    <div class="table-title">
+                        <i class="fas fa-fire"></i>
+                        市場報酬率熱力圖
+                    </div>
+                </div>
+                
+                <div class="heatmap-legend">
+                    <div class="legend-title">報酬率 (%)</div>
+                    <div class="legend-scale">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #dc2626, #991b1b);"></div>
+                            <span>大漲 (>5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #f97316, #ea580c);"></div>
+                            <span>上漲 (1-5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #6b7280, #4b5563);"></div>
+                            <span>持平 (-1~1%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #22c55e, #16a34a);"></div>
+                            <span>下跌 (-1~-5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #15803d, #166534);"></div>
+                            <span>大跌 (<-5%)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="heatmap-grid" id="heatmapGrid">
+                    <div class="heatmap-loading">
+                        <div class="loading-spinner">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <div class="loading-text">載入熱力圖數據中...</div>
+                    </div>
+                </div>
+                
+            </div>
+
+
+            <!-- 排行榜區塊（預設隱藏，僅在 Ranking 視圖顯示） -->
+            <div class="ranking-table-container" style="display: none;">
+                <div class="table-header">
+                    <div class="table-title">
+                        <i class="fas fa-list-ol"></i>
+                        市場排行榜
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="rank">名次 <span class="sort-indicator"></span></th>
+                                <th data-sort="symbol">股票 <span class="sort-indicator"></span></th>
+                                <th data-sort="return">報酬率 <span class="sort-indicator"></span></th>
+                                <th data-sort="price">價格 <span class="sort-indicator"></span></th>
+                                <th data-sort="change">漲跌 <span class="sort-indicator"></span></th>
+                                <th data-sort="volume">成交量 <span class="sort-indicator"></span></th>
+                                <th data-sort="cumulative">累積報酬 <span class="sort-indicator"></span></th>
+                                <th>動作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingTableBody">
+                            <!-- 由 updateRankingTable 動態填入 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 分析工具區 -->
+            <div class="analysis-section" style="display: none;">
+                <div class="analysis-tools">
+                    <div class="tool-card">
+                        <h3><i class="fas fa-calculator"></i> 報酬率計算器</h3>
+                        <div class="tool-content">
+                            <input type="number" id="buyPrice" placeholder="輸入買入價格" class="filter-input">
+                            <input type="number" id="sellPrice" placeholder="輸入賣出價格" class="filter-input">
+                            <button class="btn-primary" id="calculateReturnBtn">計算報酬率</button>
+                            <p id="calculatorResult"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <h3 id="riskAssessmentTitle"><i class="fas fa-balance-scale"></i> 風險評估</h3>
+                        <div class="tool-content">
+                            <div class="risk-meter">
+                                <div id="riskLevelIndicator" class="risk-level medium">中等風險</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 全局變數
+        let currentSort = { column: 'return', direction: 'desc' };
+        let chartInstance = null;
+        let currentData = [];
+
+        // 工具函式（百分位與數字簡寫）
+        function percentile(arr, p) {
+            if (!Array.isArray(arr) || arr.length === 0) return 0;
+            const a = [...arr].sort((x, y) => x - y);
+            const idx = Math.min(a.length - 1, Math.max(0, Math.floor(a.length * p)));
+            return a[idx];
+        }
+
+        function formatCompact(n) {
+            if (!n || n < 0) n = 0;
+            if (n >= 1e8) return (n / 1e8).toFixed(1) + '億';
+            if (n >= 1e4) return (n / 1e4).toFixed(1) + '萬';
+            return n.toString();
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEventListeners();
+            // 初始化日期為今天（若需要可留空代表取最新）
+            const dp = document.getElementById('datePicker');
+            if (dp) {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth()+1).padStart(2,'0');
+                const dd = String(today.getDate()).padStart(2,'0');
+                dp.value = `${yyyy}-${mm}-${dd}`;
+                dp.addEventListener('change', () => {
+                    // 切換日期即觸發全量重載
+                    loadRankingData();
+                });
+            }
+            loadRankingData();
+            initStatCardInteractions();
+        });
+
+        // 事件監聽器初始化
+        function initializeEventListeners() {
+            // 導航切換
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    switchView(this.dataset.view);
+                });
+            });
+
+            // 時間範圍選擇
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    applyFilters();
+                });
+            });
+
+            // 篩選器變更
+            document.querySelectorAll('.filter-input').forEach(input => {
+                input.addEventListener('change', applyFilters);
+            });
+            
+            // 表格排序
+            document.querySelectorAll('.ranking-table th[data-sort]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = header.dataset.sort;
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'desc';
+                    }
+                    applyFilters(); // Re-apply filters which will also sort
+                    updateSortIndicators();
+                });
+            });
+
+            // 熱力圖更新按鈕
+            const updateHeatmapBtn = document.getElementById('updateHeatmapBtn');
+            if (updateHeatmapBtn) {
+                updateHeatmapBtn.addEventListener('click', refreshHeatmap);
+            }
+
+            // 報酬率計算器
+            document.getElementById('calculateReturnBtn').addEventListener('click', () => {
+                const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+                const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+                const resultEl = document.getElementById('calculatorResult');
+
+                if (isNaN(buyPrice) || isNaN(sellPrice) || buyPrice <= 0) {
+                    resultEl.textContent = '請輸入有效的買入和賣出價格。';
+                    resultEl.style.color = 'var(--error)';
+                    return;
+                }
+
+                const returnValue = ((sellPrice - buyPrice) / buyPrice) * 100;
+                resultEl.textContent = `報酬率: ${returnValue.toFixed(2)}%`;
+                resultEl.style.color = returnValue >= 0 ? 'var(--success)' : 'var(--error)';
+            });
+        }
+        
+        // 更新排序指示器
+        function updateSortIndicators() {
+            document.querySelectorAll('.ranking-table th[data-sort]').forEach(th => {
+                th.classList.remove('sorted', 'asc', 'desc');
+                const indicator = th.querySelector('.sort-indicator');
+                if (th.dataset.sort === currentSort.column) {
+                    th.classList.add('sorted', currentSort.direction);
+                    indicator.innerHTML = currentSort.direction === 'asc' ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>';
+                } else {
+                     indicator.innerHTML = '';
+                }
+            });
+        }
+
+
+        // 視圖切換函數
+        function setVisibility(selector, display) {
+            document.querySelector(selector).style.display = display;
+        }
+
+        function switchView(view) {
+            const isOverview = view === 'overview';
+            const isRanking = view === 'ranking';
+            const isAnalysis = view === 'analysis';
+
+            setVisibility('.stats-grid', isOverview ? 'grid' : 'none');
+            setVisibility('.filter-panel', isOverview || isRanking || isAnalysis ? 'block' : 'none');
+            setVisibility('.heatmap-container', isOverview ? 'block' : 'none');
+            setVisibility('.ranking-table-container', isRanking ? 'block' : 'none');
+
+            // 在總覽僅保留「市場類別」篩選，其它隱藏；在其他頁面全部顯示
+            const industryGroup = document.getElementById('industryGroup');
+            const returnGroup = document.getElementById('returnGroup');
+            const volumeGroup = document.getElementById('volumeGroup');
+            if (industryGroup && returnGroup && volumeGroup) {
+                if (isOverview) {
+                    industryGroup.style.display = 'none';
+                    returnGroup.style.display = 'none';
+                    volumeGroup.style.display = 'none';
+                } else {
+                    industryGroup.style.display = '';
+                    returnGroup.style.display = '';
+                    volumeGroup.style.display = '';
+                }
+            }
+            // 透過 body class 控制 .overview-hide 的 CSS 顯示：
+            // 總覽隱藏（無 class），其他視圖顯示（加上 show-all-filters）
+            document.body.classList.toggle('show-all-filters', !isOverview);
+            setVisibility('.chart-container', isOverview || isAnalysis ? 'flex' : 'none');
+            setVisibility('.analysis-section', isAnalysis ? 'block' : 'none');
+
+            if(isOverview) {
+                refreshHeatmap();
+            } else if(isRanking) {
+                applyFilters();
+            }
+            if(isAnalysis) console.log("切換到深度分析視圖");
+        }
+
+        // 載入並處理數據
+        // API 狀態管理
+        let apiStatus = { state: 'idle', lastUpdated: null, asOfDate: null };
+        // 當統計卡片已由 API 正確填充時的旗標，避免被本地增強覆寫
+        window.hasStatsFromAPI = false;
+        function formatTime(d){
+            const pad = (n)=> String(n).padStart(2,'0');
+            return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+        function getSelectedDate(){
+            const el = document.getElementById('datePicker');
+            return (el && el.value) ? el.value : '';
+        }
+        function setApiStatus(state, message){
+            apiStatus.state = state;
+            const dot = document.getElementById('apiStatusDot');
+            const text = document.getElementById('apiStatusText');
+            if (!dot || !text) return;
+            dot.className = 'status-dot';
+            if (state === 'loading') dot.classList.add('loading');
+            else if (state === 'connected') dot.classList.add('connected');
+            else dot.classList.add('error');
+            text.textContent = message || (state === 'connected' ? '已連線' : state === 'loading' ? '載入中…' : '連線錯誤');
+        }
+
+        async function loadRankingData() {
+            try {
+                setApiStatus('loading', '載入中…');
+                await loadRankingFromAPI();
+                await loadStatisticsFromAPI();
+                apiStatus.lastUpdated = new Date();
+                const d = getSelectedDate();
+                // 嚴格模式：若該查詢日無資料，顯示提示並清空畫面
+                if (d && !apiStatus.asOfDate) {
+                    setApiStatus('connected', `已更新 ${formatTime(apiStatus.lastUpdated)} · 查詢日 ${d} · 該日無資料`);
+                    currentData = [];
+                    updateRankingTable([]);
+                    initStatsEnhancements();
+                    refreshHeatmap();
+                    updateAsOfBadge();
+                    return;
+                }
+                const asOf = apiStatus.asOfDate ? ` · 資料日 ${apiStatus.asOfDate}` : '';
+                setApiStatus('connected', `已更新 ${formatTime(apiStatus.lastUpdated)}${d ? ' · 查詢日 '+d : ''}${asOf}`);
+                initStatsEnhancements();
+                // 日期或資料變更後刷新熱力圖
+                refreshHeatmap();
+                updateAsOfBadge();
+            } catch (error) {
+                console.error('載入數據失敗:', error);
+                // 失敗時清空資料並維持介面可用
+                currentData = [];
+                updateRankingTable([]);
+                setApiStatus('error', '連線失敗');
+                initStatsEnhancements();
+            }
+        }
+        
+        // API 基礎 URL（目前後端執行於 3001）
+        const API_BASE_URL = 'http://localhost:3001/api';
+
+        // 從 API 載入排行榜數據
+        async function loadRankingFromAPI() {
+            try {
+                const period = document.querySelector('.period-btn.active').dataset.period;
+                const filters = {
+                    market: document.getElementById('marketFilter').value,
+                    industry: document.getElementById('industryFilter').value,
+                    returnRange: document.getElementById('returnFilter').value,
+                    volumeThreshold: parseInt(document.getElementById('volumeFilter').value) || 0
+                };
+
+                const params = new URLSearchParams({
+                    period,
+                    market: filters.market,
+                    industry: filters.industry,
+                    returnRange: filters.returnRange,
+                    volumeThreshold: filters.volumeThreshold,
+                    limit: 50
+                });
+                const selectedDate = getSelectedDate();
+                if (selectedDate) params.set('date', selectedDate);
+
+                const response = await fetch(`${API_BASE_URL}/returns/rankings?${params.toString()}`);
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.error || '排行榜數據載入失敗');
+                }
+                const data = result.data || [];
+
+                currentData = data.map((item, index) => ({
+                    rank: (index + 1),
+                    symbol: item.symbol,
+                    name: item.name || item.symbol,
+                    return: parseFloat(item.return_rate) || 0,
+                    price: parseFloat(item.current_price) || 0,
+                    change: parseFloat(item.price_change) || 0,
+                    volume: parseInt(item.volume) || 0,
+                    cumulative: parseFloat(item.cumulative_return) || 0,
+                    market: item.market || 'all',
+                    industry: item.industry || 'all',
+                    volatility: parseFloat(item.volatility) || 0.5
+                }));
+
+                // 依目前排序更新表格
+                const filtered = [...currentData];
+                sortData(filtered);
+                updateRankingTable(filtered);
+                updateSortIndicators();
+            } catch (error) {
+                console.error('載入排行榜數據失敗:', error);
+                setApiStatus('error', '連線失敗');
+                throw error;
+            }
+        }
+
+        // 從 API 載入統計數據
+        async function loadStatisticsFromAPI() {
+            try {
+                const period = document.querySelector('.period-btn.active').dataset.period;
+                const d = getSelectedDate();
+                const url = new URL(`${API_BASE_URL}/returns/statistics`);
+                url.searchParams.set('period', period);
+                // 將市場篩選帶給後端統計 API（總覽）
+                const market = document.getElementById('marketFilter')?.value || 'all';
+                url.searchParams.set('market', market);
+                if (d) url.searchParams.set('date', d);
+                const response = await fetch(url.toString());
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.data;
+                    document.getElementById('risingStocks').textContent = stats.risingStocks;
+                    // 本月最佳：僅顯示股票代碼（報酬率移至右上標籤）
+                    const topStockEl = document.getElementById('topStock');
+                    if (topStockEl) topStockEl.textContent = stats.topStock || 'N/A';
+                    // 右上角趨勢標籤顯示本月最佳報酬率（非差值）
+                    const tr = document.getElementById('topReturnTrend');
+                    if (tr) {
+                        const mr = Number(stats.maxReturn || 0);
+                        tr.classList.remove('up','down');
+                        const isUp = mr >= 0;
+                        tr.classList.add(isUp ? 'up' : 'down');
+                        tr.innerHTML = `<i class="fas ${isUp ? 'fa-arrow-up' : 'fa-arrow-down'}"></i> ${mr.toFixed(1)}%`;
+                    }
+                    document.getElementById('avgReturn').textContent = `${stats.avgReturn.toFixed(1)}%`;
+                    // 新高（優先採用 close-based 52週新高 newHighStocks，否則退回 nearHighStocks）
+                    const nhSrc = (typeof stats.newHighStocks === 'number') ? stats.newHighStocks : stats.nearHighStocks;
+                    const nh = (typeof nhSrc === 'number' && isFinite(nhSrc)) ? nhSrc : 0;
+                    document.getElementById('newHighStocks').textContent = nh;
+                    const nhSub = document.getElementById('newHighSubinfo');
+                    if (nhSub) {
+                        nhSub.innerHTML = `<span><span class="dot" style="background:#ff0080"></span>淨新高：--</span><span class="muted">52週新高：${nh}</span>`;
+                    }
+                    // 其它五張卡片：
+                    const el = (id)=> document.getElementById(id);
+                    // 站上均線比例
+                    if (el('aboveMA60')) el('aboveMA60').textContent = `${stats.aboveMA60Pct.toFixed(0)}%`;
+                    if (el('aboveMA60Sub')) el('aboveMA60Sub').innerHTML = `<span><span class="dot" style="background:#22c55e"></span>MA20：${stats.aboveMA20Pct.toFixed(0)}%</span><span class="muted">雙站上：${stats.bothAbovePct.toFixed(0)}%</span>`;
+                    // 雙站上比例（新卡片）
+                    if (el('bothAbovePct')) el('bothAbovePct').textContent = `${stats.bothAbovePct.toFixed(0)}%`;
+                    if (el('bothAboveSub')) el('bothAboveSub').innerHTML = `<span><span class="dot" style="background:#22c55e"></span>MA20：${stats.aboveMA20Pct.toFixed(0)}%</span><span class="muted">MA60：${stats.aboveMA60Pct.toFixed(0)}%</span>`;
+                    // 放量家數
+                    if (el('volSurgeUp')) el('volSurgeUp').textContent = `${stats.volSurgeUp}`;
+                    if (el('volSurgeSub')) el('volSurgeSub').innerHTML = `<span><span class="dot" style="background:#00d4ff"></span>中位倍數：${stats.medianVolMultiplier.toFixed(1)}x</span><span class="muted">>2x：${stats.over2xCount}</span>`;
+                    // 放量強度（新卡片）
+                    if (el('medianVolMultiplier')) el('medianVolMultiplier').textContent = `${stats.medianVolMultiplier.toFixed(1)}x`;
+                    if (el('medianVolSub')) el('medianVolSub').innerHTML = `<span><span class="dot" style="background:#00d4ff"></span>>1.5x：${stats.volSurgeUp}</span><span class="muted">>2x：${stats.over2xCount}</span>`;
+                    // Up/Down Volume Ratio
+                    const upDownText = stats.upDownRatio && isFinite(stats.upDownRatio) ? stats.upDownRatio.toFixed(2) : '--';
+                    if (el('upDownVol')) el('upDownVol').textContent = upDownText;
+                    if (el('upDownVolSub')) el('upDownVolSub').innerHTML = `<span><span class="dot" style="background:#22c55e"></span>上漲量：${(stats.upVolume||0).toLocaleString()}</span><span class="muted">下跌量：${(stats.downVolume||0).toLocaleString()}</span>`;
+                    // 市場波動度（使用報酬標準差）
+                    if (el('marketVolatility')) el('marketVolatility').textContent = `${stats.marketVolatility.toFixed(1)}%`;
+                    // 保存後端實際資料日以便顯示
+                    apiStatus.asOfDate = result.asOfDate || null;
+                    updateAsOfBadge();
+                    // 標記已由 API 正確填充統計卡片
+                    window.hasStatsFromAPI = true;
+
+                    // ===== 比對前一交易日，更新各卡片右上角趨勢標籤 =====
+                    const baseDate = d || apiStatus.asOfDate; // 以查詢日或實際資料日為基準
+                    const prevDate = computePrevDate(baseDate);
+                    if (prevDate) {
+                        const prevUrl = new URL(`${API_BASE_URL}/returns/statistics`);
+                        prevUrl.searchParams.set('period', period);
+                        prevUrl.searchParams.set('market', market);
+                        prevUrl.searchParams.set('date', prevDate);
+                        try {
+                            const prevResp = await fetch(prevUrl.toString());
+                            const prevResult = await prevResp.json();
+                            if (prevResult && prevResult.success) {
+                                const p = prevResult.data;
+                                // 設定趨勢：>0 上升 (up)，<0 下降 (down)，=0 中性（down 取消、顯示 '—'）
+                                setTrend('risingTrend', stats.risingStocks - (p.risingStocks||0), v => formatDeltaInt(v));
+                                setTrend('avgReturnTrend', stats.avgReturn - (p.avgReturn||0), v => formatDeltaPct(v));
+                                setTrend('newHighTrend', (typeof stats.newHighStocks==='number'?stats.newHighStocks:0) - (typeof p.newHighStocks==='number'?p.newHighStocks:0), v => formatDeltaInt(v));
+                                setTrend('bothAboveTrend', stats.bothAbovePct - (p.bothAbovePct||0), v => formatDeltaPct0(v));
+                                setTrend('volMedianTrend', stats.medianVolMultiplier - (p.medianVolMultiplier||0), v => formatDeltaTimes(v));
+                                setTrend('volSurgeTrend', stats.volSurgeUp - (p.volSurgeUp||0), v => formatDeltaInt(v));
+                                setTrend('udvTrend', (stats.upDownRatio||0) - (p.upDownRatio||0), v => formatDeltaRatio(v));
+                                setTrend('volatilityTrend', stats.marketVolatility - (p.marketVolatility||0), v => formatDeltaPct1(v));
+                            }
+                        } catch (e) {
+                            console.warn('前一日統計載入失敗，跳過趨勢更新:', e);
+                        }
+                    }
+                } else {
+                    throw new Error(result.error || '統計數據載入失敗');
+                }
+            } catch (error) {
+                console.error('載入統計數據失敗:', error);
+                setApiStatus('error', '連線失敗');
+                // 若統計載入失敗，才回退顯示佔位
+                if (typeof setUnimplementedStatPlaceholders === 'function') {
+                    setUnimplementedStatPlaceholders();
+                }
+            }
+        }
+
+        function updateAsOfBadge() {
+            const el = document.getElementById('asOfBadge');
+            if (!el) return;
+            const queryDate = getSelectedDate();
+            const asOf = apiStatus.asOfDate;
+            if (asOf) {
+                el.style.display = 'inline-block';
+                el.textContent = `資料日 ${asOf}`;
+                el.title = queryDate && queryDate !== asOf ? '所選日期非交易日或無資料，使用最近可用資料日' : '實際採用的資料日期';
+                el.className = 'asof-badge' + (queryDate && queryDate !== asOf ? ' warning' : '');
+            } else {
+                el.style.display = 'none';
+            }
+        }
+
+        // 應用所有篩選和排序
+        async function applyFilters() {
+            try {
+                await loadRankingFromAPI();
+                await loadStatisticsFromAPI();
+            } catch (error) {
+                console.error('篩選失敗:', error);
+                updateRankingTable([]);
+            }
+            updateSortIndicators();
+            initStatsEnhancements();
+            // 與熱力圖合併：套用篩選後即時刷新熱力圖
+            refreshHeatmap();
+        }
+
+        // 排序數據
+        function sortData(data) {
+             data.sort((a, b) => {
+                const aVal = a[currentSort.column];
+                const bVal = b[currentSort.column];
+
+                if (typeof aVal === 'string') {
+                    return currentSort.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                } else {
+                    return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+            });
+            // Re-assign rank after sorting
+             data.forEach((item, index) => item.rank = index + 1);
+        }
+
+        // 更新排行榜表格
+        function updateRankingTable(data) {
+            const tbody = document.getElementById('rankingTableBody');
+            if (!tbody) {
+                console.warn('rankingTableBody not found; skip rendering');
+                return;
+            }
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                const row = createRankingRow(item);
+                tbody.appendChild(row);
+            });
+        }
+        
+        // 創建排行榜行
+        function createRankingRow(item) {
+            const tr = document.createElement('tr');
+            let rank = item.rank;
+            let rankClass = '';
+            if (rank === 1) rankClass = 'gold';
+            else if (rank === 2) rankClass = 'silver';
+            else if (rank === 3) rankClass = 'bronze';
+            
+            const returnClass = item.return >= 0 ? 'positive' : 'negative';
+            const arrow = item.return >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+            
+            tr.innerHTML = `
+                <td><span class="rank-badge ${rankClass}">${rank}</span></td>
+                <td><div class="stock-info"><span class="stock-symbol">${item.symbol}</span><span class="stock-name">${item.name}</span></div></td>
+                <td><span class="return-value ${returnClass}"><i class="fas ${arrow}"></i> ${item.return.toFixed(2)}%</span></td>
+                <td>${item.price.toFixed(2)}</td>
+                <td class="${returnClass}">${item.change >= 0 ? '+' : ''}${item.change.toFixed(2)}</td>
+                <td>${item.volume.toLocaleString()}</td>
+                <td><span class="return-value ${item.cumulative >= 0 ? 'positive' : 'negative'}">${item.cumulative.toFixed(2)}%</span></td>
+                <td><button class="btn-icon" onclick="viewDetails('${item.symbol}')"><i class="fas fa-chart-line"></i></button></td>
+            `;
+            return tr;
+        }
+
+        // 移除舊的 mock 統計函式，統計改由 loadStatisticsFromAPI() 更新
+
+        // 查看詳情 (顯示圖表)
+        function viewDetails(symbol) {
+            console.log('Viewing details for:', symbol);
+            renderStockChart(symbol);
+            updateAnalysisTools(symbol);
+        }
+
+        // 渲染股票圖表
+        function renderStockChart(symbol) {
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.innerHTML = '<canvas id="stockChart"></canvas>'; // 清除佔位符並加入 canvas
+            const ctx = document.getElementById('stockChart').getContext('2d');
+            
+            const stock = (currentData || []).find(s => s.symbol === symbol);
+
+            // 模擬歷史數據
+            const labels = Array.from({length: 30}, (_, i) => `Day ${i + 1}`);
+            const data = Array.from({length: 30}, () => stock.return + (Math.random() - 0.5) * 10);
+
+            if(chartInstance) {
+                chartInstance.destroy(); // 銷毀舊圖表實例
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${symbol} 報酬率趨勢 (%)`,
+                        data: data,
+                        borderColor: 'rgba(0, 212, 255, 1)',
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            ticks: { color: 'var(--text-secondary)'},
+                            grid: { color: 'var(--border-secondary)'}
+                        },
+                        x: {
+                            ticks: { color: 'var(--text-secondary)'},
+                             grid: { color: 'var(--border-secondary)'}
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: 'var(--text-primary)' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新分析工具
+        function updateAnalysisTools(symbol) {
+            const stock = (currentData || []).find(s => s.symbol === symbol);
+            if (!stock) return;
+
+            // 更新風險評估
+            document.getElementById('riskAssessmentTitle').innerHTML = `<i class="fas fa-balance-scale"></i> ${symbol} 風險評估`;
+            const riskIndicator = document.getElementById('riskLevelIndicator');
+            riskIndicator.className = 'risk-level'; // Reset classes
+            
+            if (stock.volatility < 0.3) {
+                riskIndicator.classList.add('low');
+                riskIndicator.textContent = '低風險';
+            } else if (stock.volatility < 0.6) {
+                riskIndicator.classList.add('medium');
+                riskIndicator.textContent = '中等風險';
+            } else {
+                riskIndicator.classList.add('high');
+                riskIndicator.textContent = '高風險';
+            }
+        }
+        
+        // 重新整理數據
+        function refreshData() {
+            // 下次刷新前先清除旗標，讓新資料能覆蓋
+            window.hasStatsFromAPI = false;
+            loadRankingData();
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.innerHTML = `
+                <div class="chart-placeholder">
+                    <i class="fas fa-chart-area"></i>
+                    <p>選擇股票查看報酬率趨勢圖</p>
+                </div>`;
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+        }
+
+
+        // 熱力圖功能
+        // 熱力圖回報率篩選器（由卡片點擊設定）
+        let heatmapReturnFilter = 'all'; // 'all' | 'positive' | 'positive-high'
+
+        async function refreshHeatmap() {
+            const period = document.querySelector('.period-btn.active')?.dataset.period || 'daily';
+            // 讀取主篩選面板
+            const filters = {
+                market: document.getElementById('marketFilter')?.value || 'all',
+                industry: document.getElementById('industryFilter')?.value || 'all',
+                returnRange: document.getElementById('returnFilter')?.value || 'all',
+                volume: parseInt(document.getElementById('volumeFilter')?.value) || 0
+            };
+
+            showHeatmapLoading();
+            
+            try {
+                // 從後端獲取熱力圖資料
+                const d = getSelectedDate();
+                const url = new URL(`${API_BASE_URL}/returns/heatmap`);
+                url.searchParams.set('period', period);
+                url.searchParams.set('market', filters.market);
+                if (d) url.searchParams.set('date', d);
+                url.searchParams.set('limit', '200');
+                const resp = await fetch(url.toString());
+                const json = await resp.json();
+                let data = Array.isArray(json.data) ? json.data.map(r => ({
+                    symbol: r.symbol,
+                    return: parseFloat(r.return_rate) || 0,
+                    category: getReturnCategory(parseFloat(r.return_rate) || 0)
+                })) : [];
+                // 若後端資料為空，退回以現有數據生成
+                if (!data || data.length === 0) {
+                    data = await generateHeatmapData(filters.market, period, filters);
+                }
+                // 依據卡片交互設定的回報率篩選
+                if (heatmapReturnFilter === 'positive') {
+                    data = data.filter(d => d.category === 'positive-mid' || d.category === 'positive-high');
+                } else if (heatmapReturnFilter === 'positive-high') {
+                    data = data.filter(d => d.category === 'positive-high');
+                }
+                renderHeatmap(data);
+                updateHeatmapStats(data);
+                
+            } catch (error) {
+                console.error('更新熱力圖失敗:', error);
+                showHeatmapError();
+            }
+        }
+
+        function showHeatmapLoading() {
+            const grid = document.getElementById('heatmapGrid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="heatmap-loading">
+                        <div class="loading-spinner">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <div class="loading-text">載入熱力圖數據中...</div>
+                    </div>
+                `;
+            }
+        }
+
+        function showHeatmapError() {
+            const grid = document.getElementById('heatmapGrid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="heatmap-loading">
+                        <div class="loading-spinner">
+                            <i class="fas fa-exclamation-triangle" style="color: var(--error);"></i>
+                        </div>
+                        <div class="loading-text">載入失敗，請稍後重試</div>
+                    </div>
+                `;
+            }
+        }
+
+        async function generateHeatmapData(market, period, filters = {market:'all', industry:'all', returnRange:'all', volume:0}) {
+            // 基於現有數據生成熱力圖數據
+            let baseData = (currentData && currentData.length > 0) ? currentData : [];
+            // 先按主篩選面板條件過濾基礎資料
+            if (filters.market !== 'all') {
+                baseData = baseData.filter(item => item.market === filters.market);
+            }
+            if (filters.industry !== 'all') {
+                baseData = baseData.filter(item => item.industry === filters.industry);
+            }
+            if (filters.volume > 0) {
+                baseData = baseData.filter(item => (item.volume || 0) >= filters.volume);
+            }
+            if (filters.returnRange === 'positive') {
+                baseData = baseData.filter(item => item.return > 0);
+            } else if (filters.returnRange === 'negative') {
+                baseData = baseData.filter(item => item.return < 0);
+            } else if (filters.returnRange === 'top10') {
+                const sorted = [...baseData].sort((a,b) => b.return - a.return);
+                baseData = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.1)));
+            } else if (filters.returnRange === 'extreme') {
+                baseData = baseData.filter(item => Math.abs(item.return) > 20);
+            }
+            // 若過濾後為空，退回基礎模擬集避免渲染失敗
+            if (!baseData || baseData.length === 0) {
+                return [];
+            }
+
+            // 擴展數據到更多股票以填滿熱力圖
+            const expandedData = [];
+            const stockCount = market === 'all' ? 80 : market === 'listed' ? 50 : 30;
+            
+            for (let i = 0; i < stockCount; i++) {
+                const baseIndex = i % baseData.length;
+                const baseStock = baseData[baseIndex];
+                
+                // 生成變化的股票代碼和報酬率
+                const symbol = generateVariantSymbol(baseStock.symbol, i);
+                const returnRate = generateVariantReturn(baseStock.return, period, i);
+                
+                expandedData.push({
+                    symbol: symbol,
+                    return: returnRate,
+                    category: getReturnCategory(returnRate)
+                });
+            }
+            
+            return expandedData;
+        }
+
+        function generateVariantSymbol(baseSymbol, index) {
+            const baseCode = baseSymbol.replace('.TW', '');
+            const baseNum = parseInt(baseCode);
+            const newNum = baseNum + Math.floor(index / 3);
+            return newNum.toString();
+        }
+
+        function generateVariantReturn(baseReturn, period, index) {
+            // 根據時間週期調整波動性
+            const periodMultiplier = {
+                'daily': 0.3,
+                'weekly': 0.8,
+                'monthly': 1.0,
+                'quarterly': 1.5,
+                'yearly': 2.0
+            }[period] || 1.0;
+            
+            // 添加隨機變化
+            const variation = (Math.random() - 0.5) * 20 * periodMultiplier;
+            const newReturn = baseReturn + variation;
+            
+            // 限制在合理範圍內
+            return Math.max(-50, Math.min(100, newReturn));
+        }
+
+        function getReturnCategory(returnRate) {
+            if (returnRate > 5) return 'positive-high';        // >5% 深紅
+            if (returnRate >= 1) return 'positive-mid';         // 1%-5% 橘紅
+            if (returnRate <= -5) return 'negative-high';       // <=-5% 深綠
+            if (returnRate <= -1) return 'negative-mid';        // -1%~-5% 淺綠
+            return 'neutral';                                   // -1%~1% 灰色
+        }
+
+        function renderHeatmap(data) {
+            const grid = document.getElementById('heatmapGrid');
+            if (!grid) return;
+
+            grid.innerHTML = data.map(stock => `
+                <div class="heatmap-cell ${stock.category}" 
+                     data-symbol="${stock.symbol}" 
+                     data-return="${stock.return}"
+                     title="${stock.symbol}: ${stock.return.toFixed(2)}%"
+                     onclick="showStockDetail('${stock.symbol}', ${stock.return})">
+                    <div class="cell-symbol">${stock.symbol}</div>
+                    <div class="cell-return">${stock.return.toFixed(1)}%</div>
+                </div>
+            `).join('');
+        }
+
+        // 亮顯指定代碼於熱力圖
+        function highlightHeatmapSymbol(symbolTW) {
+            const sym = symbolTW.replace('.TW','');
+            const cell = document.querySelector(`.heatmap-cell[data-symbol="${sym}"]`);
+            if (!cell) return;
+            cell.style.outline = '2px solid var(--primary-cyan)';
+            cell.style.outlineOffset = '0px';
+            cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            setTimeout(() => { cell.style.outline = ''; }, 1600);
+        }
+
+        function updateHeatmapStats(data) {
+            const positive = data.filter(s => s.return > 0.1).length;
+            const negative = data.filter(s => s.return < -0.1).length;
+            const flat = data.length - positive - negative;
+            const average = data.reduce((sum, s) => sum + s.return, 0) / data.length;
+
+            updateElement('positiveCount', positive);
+            updateElement('negativeCount', negative);
+            updateElement('flatCount', flat);
+            updateElement('averageReturn', `${average.toFixed(2)}%`);
+        }
+
+        function showStockDetail(symbol, returnRate) {
+            // 顯示股票詳細信息
+            alert(`股票 ${symbol}\n報酬率: ${returnRate.toFixed(2)}%\n\n點擊確定查看更多詳細資料`);
+        }
+
+        function updateElement(id, value) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+        }
+
+        // 初始化時載入視圖與數據
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEventListeners();
+            // 根據目前啟用的導覽按鈕，套用對應視圖（確保總覽只顯示市場篩選）
+            const currentView = document.querySelector('.nav-item.active')?.dataset.view || 'overview';
+            switchView(currentView);
+            loadRankingData();
+            
+            // 延遲載入熱力圖
+            setTimeout(() => {
+                refreshHeatmap();
+            }, 1000);
+        });
+
+        // ========= 統計卡片增強：資料與 sparkline =========
+        function getWorkingData() {
+            return (currentData && currentData.length) ? currentData : [];
+        }
+
+        function initStatsEnhancements() {
+            // 若已由 API 提供完整統計，跳過避免覆寫卡片主值
+            if (window.hasStatsFromAPI) return;
+            const data = getWorkingData();
+            if (!data || !data.length) return;
+
+            // 計算衍生指標
+            const rising = data.filter(d => d.return > 0).length;
+            const falling = data.filter(d => d.return < 0).length;
+            const gt2 = data.filter(d => d.return > 2).length;
+            const ltNeg2 = data.filter(d => d.return < -2).length;
+            const ad = (falling === 0) ? rising : (rising / Math.max(1, falling));
+
+            const risingSub = document.getElementById('risingSubinfo');
+            if (risingSub) {
+                risingSub.innerHTML = `
+                    <span><span class="dot" style="background:#22c55e"></span>A/D ${ad.toFixed(2)}</span>
+                    <span class="muted">>2%: ${gt2}</span>
+                    <span class="muted"><-2%: ${ltNeg2}</span>
+                `;
+            }
+
+            // 產生簡單隨機走勢資料
+            renderSparkline('sparkRising', makeRandomSeries(20, rising - falling), '#22c55e');
+            renderSparkline('sparkTop', makeRandomSeries(20, 5), '#00d4ff');
+            renderSparkline('sparkAvg', makeRandomSeries(20, 2), '#888888');
+            renderSparkline('sparkHigh', makeRandomSeries(10, 3), '#ff0080');
+
+            // ====== 新增四張卡片計算（僅用價格/成交量） ======
+            // 1) 站上60日線比例（近似）：以正報酬作為簡化 proxy，若有 volatility 則提高門檻
+            const aboveMA60Approx = data.filter(d => d.return > 0.5).length; // 粗略 >0.5% 視為偏強
+            const aboveMA20Approx = data.filter(d => d.return > 0.2).length;
+            const dualAboveApprox = data.filter(d => d.return > 1).length; // 更強當作雙站上
+            const pct60 = (aboveMA60Approx / data.length) * 100;
+            const pct20 = (aboveMA20Approx / data.length) * 100;
+            const pctDual = (dualAboveApprox / data.length) * 100;
+            updateElement('aboveMA60', `${pct60.toFixed(0)}%`);
+            const aboveSubEl = document.getElementById('aboveMA60Sub');
+            if (aboveSubEl) {
+                aboveSubEl.innerHTML = `
+                    <span><span class="dot" style="background:#22c55e"></span>MA20：${pct20.toFixed(0)}%</span>
+                    <span class="muted">雙站上：${pctDual.toFixed(0)}%</span>
+                `;
+            }
+            renderSparkline('sparkMA', makeRandomSeries(20, pct60/10), '#22c55e');
+
+            // 2) 上漲放量股：以市場所屬量的上四分位做「放量」代理
+            const vols = data.map(d => d.volume || 0).sort((a,b)=>a-b);
+            const q3Vol = vols.length ? vols[Math.floor(vols.length*0.75)] : 0;
+            const surgeUps = data.filter(d => d.return > 0 && (d.volume||0) >= q3Vol);
+            const surgeCount = surgeUps.length;
+            const gt2x = Math.round(surgeCount * 0.3); // 無個股基準，暫以比例代理
+            const medianMult = 1.5; // 代理值
+            updateElement('volSurgeUp', surgeCount);
+            const surgeSubEl = document.getElementById('volSurgeSub');
+            if (surgeSubEl) {
+                surgeSubEl.innerHTML = `
+                    <span><span class="dot" style="background:#00d4ff"></span>中位倍數：${medianMult.toFixed(1)}x</span>
+                    <span class="muted">>2x：${gt2x}</span>
+                `;
+            }
+            renderSparkline('sparkVolSurge', makeRandomSeries(10, surgeCount/5), '#00d4ff');
+
+            // 3) Up/Down Volume Ratio：上漲股量合 / 下跌股量合
+            const upVol = data.filter(d => d.return > 0).reduce((s,d)=> s + (d.volume||0), 0);
+            const downVol = data.filter(d => d.return < 0).reduce((s,d)=> s + (d.volume||0), 0);
+            const ratio = downVol === 0 ? 0 : upVol / Math.max(1, downVol);
+            updateElement('upDownVol', ratio ? ratio.toFixed(2) : '—');
+            const udvSubEl = document.getElementById('upDownVolSub');
+            if (udvSubEl) {
+                udvSubEl.innerHTML = `
+                    <span><span class="dot" style="background:#22c55e"></span>上漲量：${formatCompact(upVol)}</span>
+                    <span class="muted">下跌量：${formatCompact(downVol)}</span>
+                `;
+            }
+            renderSparkline('sparkUDV', makeRandomSeries(10, ratio), '#22c55e');
+
+            // 4) 市場波動溫度計：使用 mock 的 volatility 欄位（0~1）或以 |return| 近似
+            const volsArr = data.map(d => (typeof d.volatility === 'number' ? d.volatility : Math.abs(d.return)/100));
+            const medianVol = percentile(volsArr, 0.5) || 0;
+            const hiCount = volsArr.filter(v => v > (medianVol * 1.5)).length;
+            const perc = Math.min(99, Math.round((medianVol) * 100));
+            updateElement('marketVolatility', `${perc.toFixed(0)}%`);
+            const volSubEl = document.getElementById('volatilitySub');
+            if (volSubEl) {
+                volSubEl.innerHTML = `
+                    <span><span class="dot" style="background:#f97316"></span>分位：${Math.min(99, Math.round(perc))}%</span>
+                    <span class="muted">高波動家數：${hiCount}</span>
+                `;
+            }
+            renderSparkline('sparkVolatility', makeRandomSeries(20, perc/20), '#f97316');
+        }
+
+        function makeRandomSeries(n = 20, drift = 0) {
+            const arr = [];
+            let v = 0;
+            for (let i = 0; i < n; i++) {
+                v += (Math.random() - 0.5) * 2 + (drift / 50);
+                arr.push(v);
+            }
+            return arr;
+        }
+
+        function renderSparkline(targetId, series, color = '#00d4ff') {
+            const el = document.getElementById(targetId);
+            if (!el) return;
+            const w = el.clientWidth || 240;
+            const h = 32;
+            const min = Math.min(...series);
+            const max = Math.max(...series);
+            const xStep = w / Math.max(1, series.length - 1);
+            const norm = v => h - ((v - min) / Math.max(0.0001, (max - min))) * (h - 4) - 2;
+            let d = '';
+            series.forEach((v, i) => {
+                const x = i * xStep;
+                const y = norm(v);
+                d += (i === 0 ? `M ${x},${y}` : ` L ${x},${y}`);
+            });
+            el.innerHTML = `
+                <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+                    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+                </svg>
+            `;
+        }
+
+        // ========= 卡片交互：設定熱力圖篩選與高亮 =========
+        function initStatCardInteractions() {
+            const cardRising = document.getElementById('cardRising');
+            if (cardRising) {
+                cardRising.style.cursor = 'pointer';
+                cardRising.addEventListener('click', () => {
+                    heatmapReturnFilter = 'positive';
+                    refreshHeatmap();
+                });
+            }
+            const cardNewHigh = document.getElementById('cardNewHigh');
+            if (cardNewHigh) {
+                cardNewHigh.style.cursor = 'pointer';
+                cardNewHigh.addEventListener('click', () => {
+                    heatmapReturnFilter = 'positive-high';
+                    refreshHeatmap();
+                });
+            }
+            const cardTop = document.getElementById('cardTopReturn');
+            if (cardTop) {
+                cardTop.style.cursor = 'pointer';
+                cardTop.addEventListener('click', () => {
+                    heatmapReturnFilter = 'all';
+                    refreshHeatmap();
+                    const sym = document.getElementById('topStock')?.textContent?.trim();
+                    if (sym) setTimeout(() => highlightHeatmapSymbol(sym), 500);
+                });
+            }
+
+            // 新增四張卡片互動：目前統一用正向/強勢視圖做對應
+            const cardMA = document.getElementById('cardAboveMA60');
+            if (cardMA) {
+                cardMA.style.cursor = 'pointer';
+                cardMA.addEventListener('click', () => {
+                    heatmapReturnFilter = 'positive';
+                    refreshHeatmap();
+                });
+            }
+            const cardVS = document.getElementById('cardVolSurgeUp');
+            if (cardVS) {
+                cardVS.style.cursor = 'pointer';
+                cardVS.addEventListener('click', () => {
+                    heatmapReturnFilter = 'positive';
+                    refreshHeatmap();
+                });
+            }
+            const cardUDV = document.getElementById('cardUpDownVol');
+            if (cardUDV) {
+                cardUDV.style.cursor = 'pointer';
+                cardUDV.addEventListener('click', () => {
+                    heatmapReturnFilter = 'positive';
+                    refreshHeatmap();
+                });
+            }
+            const cardVol = document.getElementById('cardVolatility');
+            if (cardVol) {
+                cardVol.style.cursor = 'pointer';
+                cardVol.addEventListener('click', () => {
+                    heatmapReturnFilter = 'all';
+                    refreshHeatmap();
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>
