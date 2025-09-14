@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+// nodemon reload trigger: manual restart at 2025-09-06
 
 const { sequelize } = require('./index');
 const stockRoutes = require('./routes/stocks');

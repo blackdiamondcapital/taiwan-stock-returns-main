@@ -1,0 +1,1671 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantGem 報酬引擎</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <!-- 引入外部CSS樣式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 引入 Chart.js 圖表庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入模組化JavaScript -->
+    <script src="utils.js"></script>
+    <script src="api.js"></script>
+    <script src="heatmap.js"></script>
+    <script src="analysis.js"></script>
+    <script src="investment.js"></script>
+    <script src="main.js"></script>
+</head>
+<body>
+        <!-- 頭部 -->
+        <header class="app-header">
+        .factor-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .quintile-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .quintile-table th, .quintile-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-secondary);
+            text-align: right;
+        }
+        .quintile-table th { text-align: left; color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+        .quintile-table tr:hover { background: rgba(255,255,255,0.04); }
+        .anomaly-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow: auto; }
+        .anomaly-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border-secondary); border-radius: 10px; background: rgba(26,31,46,0.6); cursor: pointer; }
+        .anomaly-item:hover { border-color: var(--primary-cyan); transform: translateY(-1px); transition: 0.2s ease; }
+        .anomaly-left { display: flex; align-items: center; gap: 10px; }
+        .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .badge.up { background: rgba(220,38,38,0.15); color: #ff99a3; border: 1px solid rgba(220,38,38,0.5); }
+        .badge.down { background: rgba(22,163,74,0.15); color: #9be7b0; border: 1px solid rgba(22,163,74,0.5); }
+        .badge.vol { background: rgba(0,212,255,0.15); color: #a6eeff; border: 1px solid rgba(0,212,255,0.5); }
+        .anomaly-right { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+        /* 投資決策模組樣式 */
+        .decision-section { margin-top: 2rem; }
+        .decision-section h2 { color: var(--text-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .decision-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+        .decision-card { background: var(--gradient-card); border: 1px solid var(--border-secondary); border-radius: 16px; padding: 1.5rem; }
+        .decision-card.full-width { grid-column: 1 / -1; }
+        .decision-card h3 { color: var(--text-primary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        .signal-controls, .portfolio-controls { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; }
+        .signal-params, .portfolio-params { display: flex; align-items: center; gap: 0.5rem; }
+        .signal-params label, .portfolio-params label { min-width: 80px; font-size: 0.9rem; color: var(--text-secondary); }
+        
+        .signal-results, .portfolio-results { min-height: 200px; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2); }
+        
+        .risk-metrics { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; }
+        .risk-metric { display: flex; align-items: center; gap: 1rem; }
+        .metric-label { min-width: 80px; font-size: 0.9rem; color: var(--text-secondary); }
+        .risk-bar { flex: 1; height: 20px; background: var(--bg-tertiary); border-radius: 10px; overflow: hidden; position: relative; }
+        .risk-fill { height: 100%; background: linear-gradient(90deg, var(--success), var(--warning), var(--error)); transition: width 0.5s ease; }
+        .metric-value { min-width: 60px; text-align: right; font-weight: 600; color: var(--text-primary); }
+        
+        .action-plan { min-height: 150px; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2); }
+        
+        .signal-item, .portfolio-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--border-secondary); border-radius: 8px; margin-bottom: 0.5rem; background: rgba(255,255,255,0.02); }
+        .signal-item.buy { border-left: 4px solid var(--success); }
+        .signal-item.sell { border-left: 4px solid var(--error); }
+        .signal-item.hold { border-left: 4px solid var(--text-muted); }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 0, 128, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(0, 255, 136, 0.2) 0%, transparent 50%),
+                linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #0f1419 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 主容器 */
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 頭部 */
+        .app-header {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 0.75rem 1rem; /* compact header */
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 狀態指示器 */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid var(--border-secondary);
+            border-radius: 999px;
+            background: rgba(26,31,46,0.6);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0,0,0,0.35);
+        }
+        .status-dot.loading { background: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+        .status-dot.connected { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+        .status-dot.error { background: #ff4757; box-shadow: 0 0 8px #ff4757; }
+
+        /* 日期選擇器 */
+        .date-picker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 8px;
+        }
+        .date-picker input[type="date"] {
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        .asof-badge {
+            margin-left: 10px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-secondary);
+            color: var(--text-secondary);
+            background: rgba(26,31,46,0.5);
+        }
+        .asof-badge.warning {
+            color: #ffbb33;
+            border-color: #ffbb33;
+            background: rgba(255,187,51,0.12);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-title i {
+            font-size: 1.5rem;
+            color: var(--primary-cyan);
+            filter: drop-shadow(0 0 8px var(--primary-cyan));
+        }
+
+        /* 主導航 */
+        .main-nav {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-secondary);
+            padding: 0 1rem; /* compact nav */
+            position: sticky;
+            top: 56px; /* smaller offset due to compact header */
+            z-index: 90;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 1rem; /* compact gap */
+            padding: 0.5rem 0; /* compact padding */
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95rem;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-item:hover {
+            color: var(--text-primary);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .nav-item.active {
+            color: var(--text-primary);
+            background: var(--gradient-primary);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+
+        /* 主內容區 */
+        .main-content {
+            flex: 1;
+            padding: 1.25rem; /* compact content padding */
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* 統計卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem; /* compact gap */
+            margin-bottom: 1.25rem; /* compact spacing */
+        }
+
+        .stat-card {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1rem; /* compact card padding */
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            cursor: default;
+            display: flex;            /* align children vertically */
+            flex-direction: column;  /* stack content */
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-primary);
+            opacity: 0.05;
+            transition: left 0.3s ease;
+        }
+
+        .stat-card:hover::before {
+            left: 0;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.2);
+            border-color: var(--primary-cyan);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--gradient-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .stat-trend.up {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--success);
+        }
+
+        .stat-trend.down {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--primary-red);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-subvalue {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+            color: var(--success);
+        }
+
+        .stat-subinfo {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .stat-subinfo .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.3);
+        }
+        .stat-subinfo .muted { color: var(--text-muted); }
+
+        .sparkline {
+            width: 100%;
+            height: 32px;
+        }
+        .sparkline svg {
+            width: 100%;
+            height: 32px;
+            display: block;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: auto;        /* push label to the bottom for alignment */
+        }
+
+        /* 篩選控制面板 */
+        .filter-panel {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1rem; /* compact filter panel */
+            margin-bottom: 1.25rem; /* compact spacing */
+        }
+
+        /* 預設（總覽）僅顯示市場類別，其它隱藏；在 body 加上 .show-all-filters 時顯示全部 */
+        .filter-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .filter-controls .filter-group.overview-hide { display: none; }
+        body.show-all-filters .filter-controls .filter-group.overview-hide { display: flex; flex-direction: column; }
+
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .filter-input {
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        /* 排行榜表格 */
+        .ranking-table-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background: rgba(0, 212, 255, 0.03);
+        }
+
+        .table-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-icon, .btn-primary {
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .btn-icon:hover, .btn-primary:hover {
+            border-color: var(--primary-cyan);
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--primary-cyan);
+        }
+
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .ranking-table thead {
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .ranking-table th {
+            padding: 1rem;
+            text-align: left;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid var(--border-secondary);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .ranking-table th:hover {
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .sort-indicator {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .ranking-table th.sorted .sort-indicator {
+            opacity: 1;
+            color: var(--primary-cyan);
+        }
+
+
+        .ranking-table tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .ranking-table tbody tr:hover {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .ranking-table td {
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            vertical-align: middle;
+        }
+
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .rank-badge.gold {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+        }
+
+        .rank-badge.silver {
+            background: linear-gradient(135deg, #C0C0C0, #808080);
+            color: #000;
+            box-shadow: 0 0 15px rgba(192, 192, 192, 0.5);
+        }
+
+        .rank-badge.bronze {
+            background: linear-gradient(135deg, #CD7F32, #8B4513);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(205, 127, 50, 0.5);
+        }
+
+        .stock-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .stock-symbol {
+            font-weight: 700;
+            color: var(--primary-cyan);
+            text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+        }
+
+        .stock-name {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .return-value {
+            font-weight: 600;
+            font-family: 'Monaco', 'Consolas', monospace;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .return-value.positive {
+            color: var(--success);
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+        }
+
+        .return-value.negative {
+            color: var(--primary-red);
+            text-shadow: 0 0 8px rgba(255, 71, 87, 0.3);
+        }
+
+        /* 時間範圍選擇器 */
+        .period-selector {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 10px;
+            padding: 0.25rem;
+        }
+
+        .period-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .period-btn:hover {
+            color: var(--text-primary);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .period-btn.active {
+            color: var(--text-primary);
+            background: var(--gradient-primary);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+        }
+
+        /* 圖表容器 */
+        .chart-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .chart-placeholder {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .chart-placeholder i {
+            font-size: 3rem;
+            color: var(--primary-cyan);
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* 分析工具 */
+        .analysis-section {
+            margin-bottom: 2rem;
+        }
+        .analysis-tools {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .tool-card {
+            background: var(--gradient-card);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+        .tool-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        .tool-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .risk-meter {
+            width: 100%;
+            height: 20px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .risk-level {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #fff;
+            transition: width 0.5s ease;
+        }
+        .risk-level.low { background: var(--gradient-success); width: 25%; }
+        .risk-level.medium { background: linear-gradient(135deg, var(--warning), var(--primary-green)); width: 50%; }
+        .risk-level.high { background: var(--gradient-danger); width: 75%; }
+        #calculatorResult {
+            color: var(--primary-cyan);
+            font-weight: bold;
+            margin-top: 0.5rem;
+            min-height: 1.2em;
+        }
+
+
+        /* 熱力圖樣式 */
+        .heatmap-container {
+            background: var(--gradient-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-card);
+        }
+
+        .heatmap-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+        }
+
+        .legend-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .legend-scale {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 8px rgba(0,0,0,0.25) inset;
+        }
+
+        .legend-item.negative-high .legend-color {
+            background: linear-gradient(135deg, #ff4757, #cc0000);
+        }
+
+        .legend-item.negative-mid .legend-color {
+            background: linear-gradient(135deg, #ff8888, #ff4757);
+        }
+
+        .legend-item.neutral .legend-color {
+            background: linear-gradient(135deg, #666666, #888888);
+        }
+
+        .legend-item.positive-mid .legend-color {
+            background: linear-gradient(135deg, #88ff88, #00ff88);
+        }
+
+        .legend-item.positive-high .legend-color {
+            background: linear-gradient(135deg, #00ff88, #00cc44);
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, var(--cell-size));
+            grid-auto-rows: var(--cell-size);
+            justify-content: start;
+            gap: 4px;
+            min-height: 300px;
+            padding: 1.25rem;
+            background:
+                radial-gradient(1200px 400px at 10% 0%, rgba(0,212,255,0.06), transparent 60%),
+                radial-gradient(800px 300px at 90% 100%, rgba(255,0,128,0.05), transparent 60%),
+                rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .heatmap-cell {
+            /* remove fixed aspect to let slider control size */
+            height: var(--cell-size);
+            width: 100%;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        /* 高亮選取的熱力圖格子 */
+        .heatmap-cell.highlight {
+            outline: 2px solid var(--primary-cyan);
+            box-shadow: 0 0 0 3px rgba(0,212,255,0.25), 0 8px 25px rgba(0,0,0,0.4);
+            transform: scale(1.08);
+        }
+
+        /* 熱力圖標題列與控制按鈕加強樣式（不影響排行榜表頭） */
+        .heatmap-container .table-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-secondary);
+            background:
+                linear-gradient(135deg, rgba(0,212,255,0.08), rgba(255,0,128,0.06));
+        }
+        .heatmap-container .table-title {
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .heatmap-container .table-title i {
+            color: var(--primary-cyan);
+            filter: drop-shadow(0 0 6px rgba(0,212,255,0.4));
+        }
+
+        /* 強化更新按鈕（僅熱力圖區） */
+        .btn-accent {
+            background: var(--gradient-button);
+            color: #0b1020;
+            border-color: transparent;
+            box-shadow: 0 6px 18px rgba(0,212,255,0.25);
+        }
+        .btn-accent:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(0,212,255,0.35);
+            color: #0b1020;
+        }
+
+        .heatmap-cell.positive-high {
+            background: linear-gradient(135deg, #dc2626, #991b1b);
+            color: white;
+        }
+
+        .heatmap-cell.positive-mid {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+        }
+
+        .heatmap-cell.neutral {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+
+        .heatmap-cell.negative-mid {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+
+        .heatmap-cell.negative-high {
+            background: linear-gradient(135deg, #15803d, #166534);
+            color: white;
+        }
+
+        .cell-symbol {
+            font-size: calc(var(--cell-size) * 0.2);
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell-return {
+            font-size: calc(var(--cell-size) * 0.16);
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 2px;
+        }
+
+        .heatmap-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary-cyan);
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        /* Heatmap tooltip */
+        .heatmap-tooltip {
+            position: fixed;
+            pointer-events: none;
+            background: rgba(26,31,46,0.9);
+            color: var(--text-primary);
+            border: 1px solid var(--border-secondary);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            box-shadow: var(--shadow-card);
+            z-index: 1000;
+            transform: translate(8px, 8px);
+            display: none;
+        }
+
+        .heatmap-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-secondary);
+            background: rgba(0, 212, 255, 0.03);
+        }
+
+        .stat-summary {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(26, 31, 46, 0.6);
+            border: 1px solid var(--border-secondary);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-summary:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary-cyan);
+        }
+
+        .stat-summary.positive {
+            border-left: 4px solid var(--success);
+        }
+
+        .stat-summary.negative {
+            border-left: 4px solid var(--primary-red);
+        }
+
+        .stat-summary.neutral {
+            border-left: 4px solid var(--text-muted);
+        }
+
+        .stat-summary.average {
+            border-left: 4px solid var(--info);
+        }
+
+        .stat-summary .stat-icon {
+            font-size: 1.5rem;
+        }
+
+        .stat-summary .stat-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-summary .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-summary .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .header-content, .main-nav, .main-content {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .stats-grid, .filter-controls, .analysis-tools {
+                grid-template-columns: 1fr;
+            }
+            .ranking-table {
+                display: block;
+                overflow-x: auto;
+            }
+            .nav-container {
+                overflow-x: auto;
+                gap: 1rem;
+            }
+            .heatmap-grid {
+                grid-template-columns: repeat(auto-fill, var(--cell-size));
+                grid-auto-rows: var(--cell-size);
+                justify-content: start;
+                gap: 2px;
+            }
+            .legend-scale {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .heatmap-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 永久隱藏：趨勢圖占位區塊 */
+        .chart-container { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 頭部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>QuantGem 報酬引擎</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" id="refreshDataBtn">
+                        <i class="fas fa-sync-alt"></i>
+                        重新整理
+                    </button>
+                    <div class="date-picker">
+                        <i class="far fa-calendar-alt"></i>
+                        <input type="date" id="datePicker" />
+                    </div>
+                    <span id="asOfBadge" class="asof-badge" style="display:none"></span>
+                    <div class="status-indicator" id="apiStatus">
+                        <span class="status-dot loading" id="apiStatusDot"></span>
+                        <span id="apiStatusText">等待載入</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主導航 -->
+        <nav class="main-nav">
+            <div class="nav-container">
+                <button class="nav-item active" data-view="overview">
+                    <i class="fas fa-tachometer-alt"></i>
+                    總覽
+                </button>
+                <button class="nav-item" data-view="ranking">
+                    <i class="fas fa-trophy"></i>
+                    排行榜
+                </button>
+                <button class="nav-item" data-view="analysis">
+                    <i class="fas fa-chart-bar"></i>
+                    深度分析
+                </button>
+                <button class="nav-item" data-view="comparison">
+                    <i class="fas fa-balance-scale"></i>
+                    比較工具
+                </button>
+                <button class="nav-item" data-view="alerts">
+                    <i class="fas fa-bell"></i>
+                    警示設定
+                </button>
+            </div>
+        </nav>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <!-- 篩選控制面板（移至最前） -->
+            <div class="filter-panel">
+                <div class="filter-header">
+                    <div class="filter-title">
+                        <i class="fas fa-filter"></i>
+                        篩選條件
+                    </div>
+                    <div class="period-selector">
+                        <button class="period-btn active" data-period="daily">日</button>
+                        <button class="period-btn" data-period="weekly">週</button>
+                        <button class="period-btn" data-period="monthly">月</button>
+                        <button class="period-btn" data-period="quarterly">季</button>
+                        <button class="period-btn" data-period="yearly">年</button>
+                    </div>
+                </div>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label">市場類別</label>
+                        <select class="filter-input" id="marketFilter">
+                            <option value="all">全部市場</option>
+                            <option value="listed">上市</option>
+                            <option value="otc">上櫃</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="industryGroup">
+                        <label class="filter-label">產業類別</label>
+                        <select class="filter-input" id="industryFilter">
+                            <option value="all">全部產業</option>
+                            <option value="semiconductor">半導體</option>
+                            <option value="finance">金融保險</option>
+                            <option value="shipping">航運業</option>
+                            <option value="steel">鋼鐵工業</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="returnGroup">
+                        <label class="filter-label">報酬率範圍</label>
+                        <select class="filter-input" id="returnFilter">
+                            <option value="all">全部</option>
+                            <option value="top10">前10%</option>
+                            <option value="positive">正報酬</option>
+                            <option value="negative">負報酬</option>
+                            <option value="extreme">極端值 (±20%)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group overview-hide" id="volumeGroup">
+                        <label class="filter-label">成交量門檻</label>
+                        <select class="filter-input" id="volumeFilter">
+                            <option value="all">全部</option>
+                            <option value="10000">&gt; 10000張</option>
+                            <option value="1000">&gt; 1000張</option>
+                            <option value="100">&gt; 100張</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 統計卡片 -->
+            <div class="stats-grid">
+                <div class="stat-card" id="cardRising">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-arrow-trend-up"></i>
+                        </div>
+                        <div class="stat-trend up" id="risingTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            12.5%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="risingStocks">156</div>
+                    <div class="stat-subinfo" id="risingSubinfo">
+                        <span><span class="dot" style="background:#22c55e"></span>A/D 1.20</span>
+                        <span class="muted">>2%: 65</span>
+                        <span class="muted"><-2%: 23</span>
+                    </div>
+                    <div class="sparkline" id="sparkRising"></div>
+                    <div class="stat-label">今日上漲股票數</div>
+                </div>
+
+                <div class="stat-card" id="cardTopReturn">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <div class="stat-trend up" id="topReturnTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            28.3%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="topStock">2330.TW</div>
+                    <div class="stat-subinfo" id="topReturnSubinfo">
+                        <span><span class="dot" style="background:#00d4ff"></span>半導體</span>
+                        <span class="muted">當月成交值前10</span>
+                        <span class="muted">波動: 中</span>
+                    </div>
+                    <div class="sparkline" id="sparkTop"></div>
+                    <div class="stat-label">本月最佳報酬</div>
+                </div>
+
+                <div class="stat-card" id="cardAvgReturn">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div class="stat-trend down" id="avgReturnTrend">
+                            <i class="fas fa-arrow-down"></i>
+                            3.2%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="avgReturn">8.7%</div>
+                    <div class="stat-subinfo" id="avgReturnSubinfo">
+                        <span><span class="dot" style="background:#888"></span>相對大盤 +0.8%</span>
+                        <span class="muted">分位：74%</span>
+                    </div>
+                    <div class="sparkline" id="sparkAvg"></div>
+                    <div class="stat-label">市場平均報酬率</div>
+                </div>
+
+                <div class="stat-card" id="cardNewHigh">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                         <div class="stat-trend up" id="newHighTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            新高
+                        </div>
+                    </div>
+                    <div class="stat-value" id="newHighStocks">23</div>
+                    <div class="stat-subinfo" id="newHighSubinfo">
+                        <span><span class="dot" style="background:#ff0080"></span>淨新高 +12</span>
+                        <span class="muted">52週新高：9</span>
+                    </div>
+                    <div class="sparkline" id="sparkHigh"></div>
+                    <div class="stat-label">突破新高股票</div>
+                </div>
+
+                <!-- 新增四張（僅用價格/成交量） -->
+                <div class="stat-card" id="cardAboveMA60">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-wave-square"></i>
+                        </div>
+                        <div class="stat-trend up" id="ma60Trend">
+                            <i class="fas fa-arrow-up"></i>
+                            近似
+                        </div>
+                    </div>
+                    <div class="stat-value" id="aboveMA60">--%</div>
+                    <div class="stat-subinfo" id="aboveMA60Sub">
+                        <span><span class="dot" style="background:#22c55e"></span>MA20：--%</span>
+                        <span class="muted">雙站上：--%</span>
+                    </div>
+                    <div class="sparkline" id="sparkMA"></div>
+                    <div class="stat-label">站上60日線比例（近似）</div>
+                </div>
+
+                <div class="stat-card" id="cardVolSurgeUp">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="stat-trend up" id="volSurgeTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            放量
+                        </div>
+                    </div>
+                    <div class="stat-value" id="volSurgeUp">--</div>
+                    <div class="stat-subinfo" id="volSurgeSub">
+                        <span><span class="dot" style="background:#00d4ff"></span>中位倍數：--x</span>
+                        <span class="muted">>2x：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolSurge"></div>
+                    <div class="stat-label">上漲且放量家數</div>
+                </div>
+
+                <!-- 新增：雙站上比例（同時站上 MA20 與 MA60） -->
+                <div class="stat-card" id="cardBothAbove">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-arrows-turn-to-dots"></i>
+                        </div>
+                        <div class="stat-trend up" id="bothAboveTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            趨勢
+                        </div>
+                    </div>
+                    <div class="stat-value" id="bothAbovePct">--%</div>
+                    <div class="stat-subinfo" id="bothAboveSub">
+                        <span><span class="dot" style="background:#22c55e"></span>MA20：--%</span>
+                        <span class="muted">MA60：--%</span>
+                    </div>
+                    <div class="sparkline" id="sparkBothAbove"></div>
+                    <div class="stat-label">雙站上比例</div>
+                </div>
+
+                <!-- 新增：放量強度（中位倍數） -->
+                <div class="stat-card" id="cardVolMedian">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-signal"></i>
+                        </div>
+                        <div class="stat-trend up" id="volMedianTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            強度
+                        </div>
+                    </div>
+                    <div class="stat-value" id="medianVolMultiplier">--x</div>
+                    <div class="stat-subinfo" id="medianVolSub">
+                        <span><span class="dot" style="background:#00d4ff"></span>>1.5x：--</span>
+                        <span class="muted">>2x：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolMedian"></div>
+                    <div class="stat-label">放量強度</div>
+                </div>
+
+                <div class="stat-card" id="cardUpDownVol">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-column"></i>
+                        </div>
+                        <div class="stat-trend up" id="udvTrend">
+                            <i class="fas fa-arrow-up"></i>
+                            量比
+                        </div>
+                    </div>
+                    <div class="stat-value" id="upDownVol">--</div>
+                    <div class="stat-subinfo" id="upDownVolSub">
+                        <span><span class="dot" style="background:#22c55e"></span>上漲量：--</span>
+                        <span class="muted">下跌量：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkUDV"></div>
+                    <div class="stat-label">上/下跌量比</div>
+                </div>
+
+                <div class="stat-card" id="cardVolatility">
+                    <div class="stat-header">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-area"></i>
+                        </div>
+                        <div class="stat-trend down" id="volatilityTrend">
+                            <i class="fas fa-arrow-down"></i>
+                            中性
+                        </div>
+                    </div>
+                    <div class="stat-value" id="marketVolatility">--%</div>
+                    <div class="stat-subinfo" id="volatilitySub">
+                        <span><span class="dot" style="background:#f97316"></span>分位：--%</span>
+                        <span class="muted">高波動家數：--</span>
+                    </div>
+                    <div class="sparkline" id="sparkVolatility"></div>
+                    <div class="stat-label">市場波動溫度計</div>
+                </div>
+            </div>
+
+            <!-- 報酬率熱力圖 -->
+            <div class="heatmap-container">
+                <div class="table-header">
+                    <div class="table-title">
+                        <i class="fas fa-fire"></i>
+                        市場報酬率熱力圖
+                    </div>
+                    <div class="heatmap-controls">
+                        <input id="heatmapSearch" class="filter-input" type="text" placeholder="搜尋代碼/名稱…" style="min-width: 160px;" />
+                        <select id="heatmapSort" class="filter-input" style="min-width: 160px;">
+                            <option value="ret_desc">報酬率 高→低</option>
+                            <option value="ret_asc">報酬率 低→高</option>
+                            <option value="sym_asc">代碼 A→Z</option>
+                            <option value="sym_desc">代碼 Z→A</option>
+                        </select>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label for="cellSize" class="filter-label" style="margin:0;">大小</label>
+                            <input id="cellSize" type="range" min="36" max="96" value="60" />
+                        </div>
+                        <button class="btn-primary btn-accent" id="heatmapRefreshBtn"><i class="fas fa-sync-alt"></i> 更新</button>
+                    </div>
+                </div>
+                
+                <div class="heatmap-legend">
+                    <div class="legend-title">報酬率 (%)</div>
+                    <div class="legend-scale">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #dc2626, #991b1b);"></div>
+                            <span>大漲 (>5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #f97316, #ea580c);"></div>
+                            <span>上漲 (1-5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #6b7280, #4b5563);"></div>
+                            <span>持平 (-1~1%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #22c55e, #16a34a);"></div>
+                            <span>下跌 (-1~-5%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: linear-gradient(135deg, #15803d, #166534);"></div>
+                            <span>大跌 (<-5%)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="heatmap-grid" id="heatmapGrid">
+                    <div class="heatmap-loading">
+                        <div class="loading-spinner">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <div class="loading-text">載入熱力圖數據中...</div>
+                    </div>
+                </div>
+
+                <!-- tooltip -->
+                <div id="heatmapTooltip" class="heatmap-tooltip"></div>
+                
+            </div>
+
+
+            <!-- 排行榜區塊（預設隱藏，僅在 Ranking 視圖顯示） -->
+            <div class="ranking-table-container" style="display: none;">
+                <div class="table-header">
+                    <div class="table-title">
+                        <i class="fas fa-list-ol"></i>
+                        市場排行榜
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="rank">名次 <span class="sort-indicator"></span></th>
+                                <th data-sort="symbol">股票 <span class="sort-indicator"></span></th>
+                                <th data-sort="return">報酬率 <span class="sort-indicator"></span></th>
+                                <th data-sort="price">價格 <span class="sort-indicator"></span></th>
+                                <th data-sort="change">漲跌 <span class="sort-indicator"></span></th>
+                                <th data-sort="volume">成交量 <span class="sort-indicator"></span></th>
+                                <th data-sort="cumulative">累積報酬 <span class="sort-indicator"></span></th>
+                                <th>動作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingTableBody">
+                            <!-- 由 updateRankingTable 動態填入 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 深度分析 -->
+            <section class="analysis-section" style="display:none">
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-chart-scatter"></i> 因子散點圖</h3>
+                        <div class="factor-controls">
+                            <label>因子選擇：</label>
+                            <select id="factorSelect" class="filter-input" style="width:120px;">
+                                <option value="return">報酬</option>
+                                <option value="volume">成交量</option>
+                                <option value="volatility">波動</option>
+                            </select>
+                        </div>
+                        <div id="factorScatterWrap" style="height:280px;margin-top:10px;">
+                            <div class="muted">載入中...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-layer-group"></i> 五分位分析</h3>
+                        <table class="quintile-table" id="quintileTable">
+                            <thead>
+                                <tr><th>分組</th><th>樣本數</th><th>平均報酬</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="3" style="text-align:center;color:var(--text-muted)">載入中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 市場異常</h3>
+                        <div class="anomaly-list" id="anomaliesList">
+                            <div class="muted">載入中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 投資決策模組 -->
+                <div class="decision-section">
+                    <h2><i class="fas fa-brain"></i> 投資決策引擎</h2>
+                    
+                    <div class="decision-grid">
+                        <!-- 訊號生成 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-signal"></i> 買賣訊號</h3>
+                            <div class="signal-controls">
+                                <div class="signal-params">
+                                    <label>策略類型：</label>
+                                    <select id="strategyType" class="filter-input">
+                                        <option value="momentum">動量策略</option>
+                                        <option value="reversal">反轉策略</option>
+                                        <option value="volume">成交量突破</option>
+                                        <option value="composite">綜合訊號</option>
+                                    </select>
+                                </div>
+                                <div class="signal-params">
+                                    <label>風險偏好：</label>
+                                    <select id="riskTolerance" class="filter-input">
+                                        <option value="conservative">保守型</option>
+                                        <option value="moderate">穩健型</option>
+                                        <option value="aggressive">積極型</option>
+                                    </select>
+                                </div>
+                                <button class="btn-primary" id="generateSignalsBtn">
+                                    <i class="fas fa-magic"></i> 生成訊號
+                                </button>
+                            </div>
+                            <div id="signalResults" class="signal-results">
+                                <div class="muted">請選擇策略參數並生成訊號</div>
+                            </div>
+                        </div>
+
+                        <!-- 組合優化 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-chart-pie"></i> 投資組合建議</h3>
+                            <div class="portfolio-controls">
+                                <div class="portfolio-params">
+                                    <label>投資金額：</label>
+                                    <input type="number" id="investAmount" class="filter-input" placeholder="1000000" value="1000000">
+                                </div>
+                                <div class="portfolio-params">
+                                    <label>最大持股數：</label>
+                                    <input type="number" id="maxStocks" class="filter-input" placeholder="10" value="10" min="3" max="20">
+                                </div>
+                                <div class="portfolio-params">
+                                    <label>單股上限：</label>
+                                    <input type="number" id="maxWeight" class="filter-input" placeholder="20" value="20" min="5" max="50">
+                                    <span>%</span>
+                                </div>
+                                <button class="btn-primary" id="optimizePortfolioBtn">
+                                    <i class="fas fa-calculator"></i> 優化組合
+                                </button>
+                            </div>
+                            <div id="portfolioResults" class="portfolio-results">
+                                <div class="muted">設定參數後點擊優化組合</div>
+                            </div>
+                        </div>
+
+                        <!-- 風險評估 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-shield-alt"></i> 風險評估</h3>
+                            <div id="riskAssessment" class="risk-assessment">
+                                <div class="risk-metrics">
+                                    <div class="risk-metric">
+                                        <span class="metric-label">市場風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="marketRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="marketRiskValue">-</span>
+                                    </div>
+                                    <div class="risk-metric">
+                                        <span class="metric-label">集中度風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="concentrationRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="concentrationRiskValue">-</span>
+                                    </div>
+                                    <div class="risk-metric">
+                                        <span class="metric-label">流動性風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="liquidityRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="liquidityRiskValue">-</span>
+                                    </div>
+                                </div>
+                                <button class="btn-primary" id="assessRiskBtn">
+                                    <i class="fas fa-search"></i> 評估風險
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 執行建議 -->
+                        <div class="decision-card full-width">
+                            <h3><i class="fas fa-clipboard-list"></i> 執行建議</h3>
+                            <div id="actionPlan" class="action-plan">
+                                <div class="muted">完成上述分析後，系統將生成具體的執行建議</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 分析工具區 -->
+            <div class="analysis-section" style="display: none;">
+                <div class="analysis-tools">
+                    <div class="tool-card">
+                        <h3><i class="fas fa-calculator"></i> 報酬率計算器</h3>
+                        <div class="tool-content">
+                            <input type="number" id="buyPrice" placeholder="輸入買入價格" class="filter-input">
+                            <input type="number" id="sellPrice" placeholder="輸入賣出價格" class="filter-input">
+                            <button class="btn-primary" id="calculateReturnBtn">計算報酬率</button>
+                            <p id="calculatorResult"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-card">
+                        <h3 id="riskAssessmentTitle"><i class="fas fa-balance-scale"></i> 風險評估</h3>
+                        <div class="tool-content">
+                            <div class="risk-meter">
+                                <div id="riskLevelIndicator" class="risk-level medium">中等風險</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>

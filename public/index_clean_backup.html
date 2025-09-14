@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantGem 報酬引擎 - 台灣股市分析</title>
+    
+    <!-- 引入 Font Awesome 圖標庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- 引入外部CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 引入 Chart.js 圖表庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入模組化JavaScript -->
+    <script src="utils.js"></script>
+    <script src="api.js"></script>
+    <script src="heatmap.js"></script>
+    <script src="analysis.js"></script>
+    <script src="investment.js"></script>
+    <script src="main.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 頭部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-title">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>QuantGem 報酬引擎</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" id="refreshDataBtn">
+                        <i class="fas fa-sync-alt"></i>
+                        重新整理
+                    </button>
+                    <div class="date-picker">
+                        <i class="far fa-calendar-alt"></i>
+                        <input type="date" id="datePicker" />
+                    </div>
+                    <span id="asOfBadge" class="asof-badge" style="display:none"></span>
+                    <div class="status-indicator" id="apiStatus">
+                        <span class="status-dot loading" id="apiStatusDot"></span>
+                        <span id="apiStatusText">連接中...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主導航 -->
+        <nav class="main-nav">
+            <div class="nav-container">
+                <button class="nav-item active" data-view="overview">
+                    <i class="fas fa-th-large"></i>
+                    總覽
+                </button>
+                <button class="nav-item" data-view="ranking">
+                    <i class="fas fa-list-ol"></i>
+                    排行榜
+                </button>
+                <button class="nav-item" data-view="analysis">
+                    <i class="fas fa-chart-bar"></i>
+                    深度分析
+                </button>
+            </div>
+        </nav>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            <!-- 統計卡片區 -->
+            <div class="stats-grid">
+                <div class="stat-card" id="positiveCount">
+                    <div class="stat-header">
+                        <div class="stat-icon positive">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">上漲股票</div>
+                            <div class="stat-value" id="positiveCountValue">-</div>
+                            <div class="stat-subinfo">
+                                <span class="stat-percentage" id="positivePercentage">-%</span>
+                            </div>
+                        </div>
+                        <div class="trend-badge" id="positiveCountBadge" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="stat-card" id="negativeCount">
+                    <div class="stat-header">
+                        <div class="stat-icon negative">
+                            <i class="fas fa-arrow-down"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">下跌股票</div>
+                            <div class="stat-value" id="negativeCountValue">-</div>
+                            <div class="stat-subinfo">
+                                <span class="stat-percentage" id="negativePercentage">-%</span>
+                            </div>
+                        </div>
+                        <div class="trend-badge" id="negativeCountBadge" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="stat-card" id="averageReturn">
+                    <div class="stat-header">
+                        <div class="stat-icon neutral">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">平均報酬</div>
+                            <div class="stat-value" id="averageReturnValue">-%</div>
+                            <div class="stat-subinfo">
+                                <span class="stat-percentage" id="medianReturn">中位數: -%</span>
+                            </div>
+                        </div>
+                        <div class="trend-badge" id="averageReturnBadge" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="stat-card" id="totalVolume">
+                    <div class="stat-header">
+                        <div class="stat-icon volume">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">總成交量</div>
+                            <div class="stat-value" id="totalVolumeValue">-</div>
+                            <div class="stat-subinfo">
+                                <span class="stat-percentage" id="maxGain">最大漲幅: -%</span>
+                            </div>
+                        </div>
+                        <div class="trend-badge" id="totalVolumeBadge" style="display:none"></div>
+                    </div>
+                </div>
+
+                <div class="stat-card" id="marketVolatility">
+                    <div class="stat-header">
+                        <div class="stat-icon volatility">
+                            <i class="fas fa-wave-square"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">市場波動</div>
+                            <div class="stat-value" id="marketVolatilityValue">-%</div>
+                            <div class="stat-subinfo">
+                                <span class="stat-percentage" id="maxLoss">最大跌幅: -%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 篩選面板 -->
+            <div class="filter-panel">
+                <div class="filter-group">
+                    <label for="periodFilter">期間：</label>
+                    <select id="periodFilter" class="filter-input">
+                        <option value="daily">日報酬</option>
+                        <option value="weekly">週報酬</option>
+                        <option value="monthly">月報酬</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="marketFilter">市場：</label>
+                    <select id="marketFilter" class="filter-input">
+                        <option value="all">全部</option>
+                        <option value="TSE">上市</option>
+                        <option value="OTC">上櫃</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="industryFilter">產業：</label>
+                    <select id="industryFilter" class="filter-input">
+                        <option value="all">全部產業</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="returnFilter">報酬篩選：</label>
+                    <select id="returnFilter" class="filter-input">
+                        <option value="all">全部</option>
+                        <option value="positive">僅上漲</option>
+                        <option value="negative">僅下跌</option>
+                        <option value="high-positive">高漲幅 (>5%)</option>
+                        <option value="high-negative">高跌幅 (<-5%)</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="volumeFilter">成交量：</label>
+                    <select id="volumeFilter" class="filter-input">
+                        <option value="all">全部</option>
+                        <option value="high">高量 (前25%)</option>
+                        <option value="low">低量 (後25%)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 熱力圖容器 -->
+            <div class="heatmap-container">
+                <div class="heatmap-header">
+                    <h2>股票報酬熱力圖</h2>
+                    <div class="heatmap-controls">
+                        <select id="heatmapSort" class="filter-input">
+                            <option value="return">按報酬排序</option>
+                            <option value="volume">按成交量排序</option>
+                            <option value="symbol">按代號排序</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color positive-high"></div>
+                        <span>高漲幅 (>3%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color positive-mid"></div>
+                        <span>中漲幅 (0-3%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color negative-mid"></div>
+                        <span>中跌幅 (0 to -3%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color negative-high"></div>
+                        <span>高跌幅 (<-3%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color neutral"></div>
+                        <span>無變化/無資料</span>
+                    </div>
+                </div>
+                
+                <div id="heatmap" class="heatmap-grid"></div>
+            </div>
+
+            <!-- 排行榜容器 -->
+            <div class="ranking-table-container" style="display: none;">
+                <div class="table-header">
+                    <h2>股票排行榜</h2>
+                    <div class="table-info">
+                        <span id="tableInfo">載入中...</span>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="ranking-table">
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>股票代號</th>
+                                <th>股票名稱</th>
+                                <th>報酬率</th>
+                                <th>成交量</th>
+                                <th>累積報酬</th>
+                                <th>市場</th>
+                                <th>產業</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingTableBody">
+                            <tr>
+                                <td colspan="8" class="loading-cell">載入中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 深度分析區 -->
+            <div class="analysis-section" style="display: none;">
+                <div class="analysis-header">
+                    <h2><i class="fas fa-microscope"></i> 深度分析</h2>
+                    <div class="factor-controls">
+                        <label for="factorSelect">分析因子：</label>
+                        <select id="factorSelect" class="filter-input">
+                            <option value="return">報酬率</option>
+                            <option value="volume">成交量</option>
+                            <option value="volatility">波動度</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="analysis-grid">
+                    <!-- 因子散點圖 -->
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-scatter-chart"></i> 因子散點圖</h3>
+                        <div id="factorScatterWrap" class="chart-wrapper">
+                            <div class="muted">選擇因子後顯示散點圖</div>
+                        </div>
+                    </div>
+
+                    <!-- 五分位表格 -->
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-table"></i> 五分位分析</h3>
+                        <div id="quintileTableWrap" class="table-wrapper">
+                            <div class="muted">載入五分位數據中...</div>
+                        </div>
+                    </div>
+
+                    <!-- 異常值列表 -->
+                    <div class="analysis-card full-width">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 異常值檢測</h3>
+                        <div id="anomalyListWrap" class="anomaly-wrapper">
+                            <div class="muted">分析異常值中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 投資決策模組 -->
+                <div class="decision-section">
+                    <h2><i class="fas fa-brain"></i> 投資決策輔助</h2>
+                    <div class="decision-grid">
+                        <!-- 訊號生成 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-signal"></i> 訊號生成</h3>
+                            <div class="signal-controls">
+                                <div class="signal-params">
+                                    <label>策略類型：</label>
+                                    <select id="strategyType" class="filter-input">
+                                        <option value="momentum">動量策略</option>
+                                        <option value="reversal">反轉策略</option>
+                                        <option value="volume">成交量策略</option>
+                                    </select>
+                                </div>
+                                <div class="signal-params">
+                                    <label>風險偏好：</label>
+                                    <select id="riskTolerance" class="filter-input">
+                                        <option value="conservative">保守型</option>
+                                        <option value="moderate">穩健型</option>
+                                        <option value="aggressive">積極型</option>
+                                    </select>
+                                </div>
+                                <button class="btn-primary" id="generateSignalsBtn">
+                                    <i class="fas fa-magic"></i> 生成訊號
+                                </button>
+                            </div>
+                            <div id="signalResults" class="signal-results">
+                                <div class="muted">請選擇策略參數並生成訊號</div>
+                            </div>
+                        </div>
+
+                        <!-- 組合優化 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-balance-scale"></i> 組合優化</h3>
+                            <div class="portfolio-controls">
+                                <div class="portfolio-params">
+                                    <label>最大持股數：</label>
+                                    <input type="number" id="maxStocks" class="filter-input" placeholder="10" value="10" min="3" max="20">
+                                </div>
+                                <div class="portfolio-params">
+                                    <label>單股上限：</label>
+                                    <input type="number" id="maxWeight" class="filter-input" placeholder="20" value="20" min="5" max="50">
+                                    <span>%</span>
+                                </div>
+                                <button class="btn-primary" id="optimizePortfolioBtn">
+                                    <i class="fas fa-calculator"></i> 優化組合
+                                </button>
+                            </div>
+                            <div id="portfolioResults" class="portfolio-results">
+                                <div class="muted">設定參數後點擊優化組合</div>
+                            </div>
+                        </div>
+
+                        <!-- 風險評估 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-shield-alt"></i> 風險評估</h3>
+                            <div class="risk-metrics">
+                                <div class="risk-metric">
+                                    <span class="metric-label">市場風險</span>
+                                    <div class="risk-bar">
+                                        <div class="risk-fill" id="marketRisk" style="width: 0%"></div>
+                                    </div>
+                                    <span class="metric-value" id="marketRiskValue">-</span>
+                                </div>
+                                <div class="risk-metric">
+                                    <span class="metric-label">集中度風險</span>
+                                    <div class="risk-bar">
+                                        <div class="risk-fill" id="concentrationRisk" style="width: 0%"></div>
+                                    </div>
+                                    <span class="metric-value" id="concentrationRiskValue">-</span>
+                                </div>
+                                <div class="risk-metric">
+                                    <span class="metric-label">流動性風險</span>
+                                    <div class="risk-bar">
+                                        <div class="risk-fill" id="liquidityRisk" style="width: 0%"></div>
+                                    </div>
+                                    <span class="metric-value" id="liquidityRiskValue">-</span>
+                                </div>
+                            </div>
+                            <button class="btn-primary" id="assessRiskBtn">
+                                <i class="fas fa-search"></i> 評估風險
+                            </button>
+                        </div>
+
+                        <!-- 執行建議 -->
+                        <div class="decision-card full-width">
+                            <h3><i class="fas fa-clipboard-list"></i> 執行建議</h3>
+                            <div id="actionPlan" class="action-plan">
+                                <div class="muted">完成上述分析後，系統將生成具體的執行建議</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 圖表容器 -->
+            <div class="chart-container" style="display: none;">
+                <canvas id="returnChart"></canvas>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

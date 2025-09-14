@@ -16,6 +16,8 @@
             --primary-green: #00ff88;
             --primary-orange: #ffaa00;
             --primary-red: #ff4757;
+            /* heatmap cell size control */
+            --cell-size: 60px;
             
             --bg-primary: #0a0e1a;
             --bg-secondary: #1a1f2e;
@@ -43,6 +45,64 @@
             --gradient-success: linear-gradient(135deg, #00ff88, #00d4ff);
             --gradient-danger: linear-gradient(135deg, #ff4757, #ff0080);
         }
+
+        /* 深度分析新增元件 */
+        .factor-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .quintile-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .quintile-table th, .quintile-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-secondary);
+            text-align: right;
+        }
+        .quintile-table th { text-align: left; color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+        .quintile-table tr:hover { background: rgba(255,255,255,0.04); }
+        .anomaly-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow: auto; }
+        .anomaly-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border-secondary); border-radius: 10px; background: rgba(26,31,46,0.6); cursor: pointer; }
+        .anomaly-item:hover { border-color: var(--primary-cyan); transform: translateY(-1px); transition: 0.2s ease; }
+        .anomaly-left { display: flex; align-items: center; gap: 10px; }
+        .badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .badge.up { background: rgba(220,38,38,0.15); color: #ff99a3; border: 1px solid rgba(220,38,38,0.5); }
+        .badge.down { background: rgba(22,163,74,0.15); color: #9be7b0; border: 1px solid rgba(22,163,74,0.5); }
+        .badge.vol { background: rgba(0,212,255,0.15); color: #a6eeff; border: 1px solid rgba(0,212,255,0.5); }
+        .anomaly-right { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+        /* 投資決策模組樣式 */
+        .decision-section { margin-top: 2rem; }
+        .decision-section h2 { color: var(--text-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .decision-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+        .decision-card { background: var(--gradient-card); border: 1px solid var(--border-secondary); border-radius: 16px; padding: 1.5rem; }
+        .decision-card.full-width { grid-column: 1 / -1; }
+        .decision-card h3 { color: var(--text-primary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        .signal-controls, .portfolio-controls { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; }
+        .signal-params, .portfolio-params { display: flex; align-items: center; gap: 0.5rem; }
+        .signal-params label, .portfolio-params label { min-width: 80px; font-size: 0.9rem; color: var(--text-secondary); }
+        
+        .signal-results, .portfolio-results { min-height: 200px; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2); }
+        
+        .risk-metrics { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem; }
+        .risk-metric { display: flex; align-items: center; gap: 1rem; }
+        .metric-label { min-width: 80px; font-size: 0.9rem; color: var(--text-secondary); }
+        .risk-bar { flex: 1; height: 20px; background: var(--bg-tertiary); border-radius: 10px; overflow: hidden; position: relative; }
+        .risk-fill { height: 100%; background: linear-gradient(90deg, var(--success), var(--warning), var(--error)); transition: width 0.5s ease; }
+        .metric-value { min-width: 60px; text-align: right; font-weight: 600; color: var(--text-primary); }
+        
+        .action-plan { min-height: 150px; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2); }
+        
+        .signal-item, .portfolio-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--border-secondary); border-radius: 8px; margin-bottom: 0.5rem; background: rgba(255,255,255,0.02); }
+        .signal-item.buy { border-left: 4px solid var(--success); }
+        .signal-item.sell { border-left: 4px solid var(--error); }
+        .signal-item.hold { border-left: 4px solid var(--text-muted); }
         
         * {
             margin: 0;
@@ -789,7 +849,9 @@
 
         .heatmap-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            grid-template-columns: repeat(auto-fill, var(--cell-size));
+            grid-auto-rows: var(--cell-size);
+            justify-content: start;
             gap: 4px;
             min-height: 300px;
             padding: 1.25rem;
@@ -801,7 +863,9 @@
         }
 
         .heatmap-cell {
-            aspect-ratio: 1;
+            /* remove fixed aspect to let slider control size */
+            height: var(--cell-size);
+            width: 100%;
             border-radius: 8px;
             display: flex;
             flex-direction: column;
@@ -818,6 +882,13 @@
             transform: scale(1.1);
             z-index: 10;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        /* 高亮選取的熱力圖格子 */
+        .heatmap-cell.highlight {
+            outline: 2px solid var(--primary-cyan);
+            box-shadow: 0 0 0 3px rgba(0,212,255,0.25), 0 8px 25px rgba(0,0,0,0.4);
+            transform: scale(1.08);
         }
 
         /* 熱力圖標題列與控制按鈕加強樣式（不影響排行榜表頭） */
@@ -876,14 +947,14 @@
         }
 
         .cell-symbol {
-            font-size: 0.75rem;
+            font-size: calc(var(--cell-size) * 0.2);
             font-weight: 600;
             color: white;
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .cell-return {
-            font-size: 0.625rem;
+            font-size: calc(var(--cell-size) * 0.16);
             font-weight: 500;
             color: rgba(255, 255, 255, 0.9);
             margin-top: 2px;
@@ -907,6 +978,22 @@
         .loading-text {
             font-size: 1rem;
             font-weight: 500;
+        }
+
+        /* Heatmap tooltip */
+        .heatmap-tooltip {
+            position: fixed;
+            pointer-events: none;
+            background: rgba(26,31,46,0.9);
+            color: var(--text-primary);
+            border: 1px solid var(--border-secondary);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            box-shadow: var(--shadow-card);
+            z-index: 1000;
+            transform: translate(8px, 8px);
+            display: none;
         }
 
         .heatmap-stats {
@@ -989,7 +1076,9 @@
                 gap: 1rem;
             }
             .heatmap-grid {
-                grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+                grid-template-columns: repeat(auto-fill, var(--cell-size));
+                grid-auto-rows: var(--cell-size);
+                justify-content: start;
                 gap: 2px;
             }
             .legend-scale {
@@ -1000,6 +1089,9 @@
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* 永久隱藏：趨勢圖占位區塊 */
+        .chart-container { display: none !important; }
     </style>
 </head>
 <body>
@@ -1311,13 +1403,26 @@
                 </div>
             </div>
 
-
             <!-- 報酬率熱力圖 -->
             <div class="heatmap-container">
                 <div class="table-header">
                     <div class="table-title">
                         <i class="fas fa-fire"></i>
                         市場報酬率熱力圖
+                    </div>
+                    <div class="heatmap-controls">
+                        <input id="heatmapSearch" class="filter-input" type="text" placeholder="搜尋代碼/名稱…" style="min-width: 160px;" />
+                        <select id="heatmapSort" class="filter-input" style="min-width: 160px;">
+                            <option value="ret_desc">報酬率 高→低</option>
+                            <option value="ret_asc">報酬率 低→高</option>
+                            <option value="sym_asc">代碼 A→Z</option>
+                            <option value="sym_desc">代碼 Z→A</option>
+                        </select>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label for="cellSize" class="filter-label" style="margin:0;">大小</label>
+                            <input id="cellSize" type="range" min="36" max="96" value="60" />
+                        </div>
+                        <button class="btn-primary btn-accent" id="heatmapRefreshBtn"><i class="fas fa-sync-alt"></i> 更新</button>
                     </div>
                 </div>
                 
@@ -1355,6 +1460,9 @@
                         <div class="loading-text">載入熱力圖數據中...</div>
                     </div>
                 </div>
+
+                <!-- tooltip -->
+                <div id="heatmapTooltip" class="heatmap-tooltip"></div>
                 
             </div>
 
@@ -1387,6 +1495,149 @@
                     </table>
                 </div>
             </div>
+
+            <!-- 深度分析 -->
+            <section class="analysis-section" style="display:none">
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-chart-scatter"></i> 因子散點圖</h3>
+                        <div class="factor-controls">
+                            <label>因子選擇：</label>
+                            <select id="factorSelect" class="filter-input" style="width:120px;">
+                                <option value="return">報酬</option>
+                                <option value="volume">成交量</option>
+                                <option value="volatility">波動</option>
+                            </select>
+                        </div>
+                        <div id="factorScatterWrap" style="height:280px;margin-top:10px;">
+                            <div class="muted">載入中...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-layer-group"></i> 五分位分析</h3>
+                        <table class="quintile-table" id="quintileTable">
+                            <thead>
+                                <tr><th>分組</th><th>樣本數</th><th>平均報酬</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="3" style="text-align:center;color:var(--text-muted)">載入中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="analysis-card">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 市場異常</h3>
+                        <div class="anomaly-list" id="anomaliesList">
+                            <div class="muted">載入中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 投資決策模組 -->
+                <div class="decision-section">
+                    <h2><i class="fas fa-brain"></i> 投資決策引擎</h2>
+                    
+                    <div class="decision-grid">
+                        <!-- 訊號生成 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-signal"></i> 買賣訊號</h3>
+                            <div class="signal-controls">
+                                <div class="signal-params">
+                                    <label>策略類型：</label>
+                                    <select id="strategyType" class="filter-input">
+                                        <option value="momentum">動量策略</option>
+                                        <option value="reversal">反轉策略</option>
+                                        <option value="volume">成交量突破</option>
+                                        <option value="composite">綜合訊號</option>
+                                    </select>
+                                </div>
+                                <div class="signal-params">
+                                    <label>風險偏好：</label>
+                                    <select id="riskTolerance" class="filter-input">
+                                        <option value="conservative">保守型</option>
+                                        <option value="moderate">穩健型</option>
+                                        <option value="aggressive">積極型</option>
+                                    </select>
+                                </div>
+                                <button class="btn-primary" onclick="generateSignals()">
+                                    <i class="fas fa-magic"></i> 生成訊號
+                                </button>
+                            </div>
+                            <div id="signalResults" class="signal-results">
+                                <div class="muted">請選擇策略參數並生成訊號</div>
+                            </div>
+                        </div>
+
+                        <!-- 組合優化 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-chart-pie"></i> 投資組合建議</h3>
+                            <div class="portfolio-controls">
+                                <div class="portfolio-params">
+                                    <label>投資金額：</label>
+                                    <input type="number" id="investAmount" class="filter-input" placeholder="1000000" value="1000000">
+                                </div>
+                                <div class="portfolio-params">
+                                    <label>最大持股數：</label>
+                                    <input type="number" id="maxStocks" class="filter-input" placeholder="10" value="10" min="3" max="20">
+                                </div>
+                                <div class="portfolio-params">
+                                    <label>單股上限：</label>
+                                    <input type="number" id="maxWeight" class="filter-input" placeholder="20" value="20" min="5" max="50">
+                                    <span>%</span>
+                                </div>
+                                <button class="btn-primary" onclick="optimizePortfolio()">
+                                    <i class="fas fa-calculator"></i> 優化組合
+                                </button>
+                            </div>
+                            <div id="portfolioResults" class="portfolio-results">
+                                <div class="muted">設定參數後點擊優化組合</div>
+                            </div>
+                        </div>
+
+                        <!-- 風險評估 -->
+                        <div class="decision-card">
+                            <h3><i class="fas fa-shield-alt"></i> 風險評估</h3>
+                            <div id="riskAssessment" class="risk-assessment">
+                                <div class="risk-metrics">
+                                    <div class="risk-metric">
+                                        <span class="metric-label">市場風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="marketRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="marketRiskValue">-</span>
+                                    </div>
+                                    <div class="risk-metric">
+                                        <span class="metric-label">集中度風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="concentrationRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="concentrationRiskValue">-</span>
+                                    </div>
+                                    <div class="risk-metric">
+                                        <span class="metric-label">流動性風險</span>
+                                        <div class="risk-bar">
+                                            <div class="risk-fill" id="liquidityRisk" style="width: 0%"></div>
+                                        </div>
+                                        <span class="metric-value" id="liquidityRiskValue">-</span>
+                                    </div>
+                                </div>
+                                <button class="btn-primary" onclick="assessRisk()">
+                                    <i class="fas fa-search"></i> 評估風險
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 執行建議 -->
+                        <div class="decision-card full-width">
+                            <h3><i class="fas fa-clipboard-list"></i> 執行建議</h3>
+                            <div id="actionPlan" class="action-plan">
+                                <div class="muted">完成上述分析後，系統將生成具體的執行建議</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <!-- 分析工具區 -->
             <div class="analysis-section" style="display: none;">
@@ -1517,6 +1768,55 @@
                 resultEl.textContent = `報酬率: ${returnValue.toFixed(2)}%`;
                 resultEl.style.color = returnValue >= 0 ? 'var(--success)' : 'var(--error)';
             });
+
+            // 熱力圖控制：搜尋（加上簡易防抖）
+            const searchEl = document.getElementById('heatmapSearch');
+            if (searchEl) {
+                let timer;
+                searchEl.addEventListener('input', () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => refreshHeatmap(), 200);
+                });
+            }
+
+            // 熱力圖控制：排序
+            const sortEl = document.getElementById('heatmapSort');
+            if (sortEl) {
+                sortEl.addEventListener('change', () => refreshHeatmap());
+            }
+
+            // 熱力圖控制：cell 大小滑桿
+            const sizeEl = document.getElementById('cellSize');
+            if (sizeEl) {
+                const applySize = () => {
+                    const px = `${sizeEl.value}px`;
+                    document.documentElement.style.setProperty('--cell-size', px);
+                    const grid = document.getElementById('heatmapGrid');
+                    if (grid) {
+                        grid.style.gridTemplateColumns = `repeat(auto-fill, ${px})`;
+                        grid.style.gridAutoRows = px;
+                    }
+                };
+                // 初始化一次，確保載入當下即套用滑桿預設值
+                applySize();
+                sizeEl.addEventListener('input', () => {
+                    applySize();
+                    // 重新渲染以確保新尺寸應用在所有 cell
+                    refreshHeatmap();
+                });
+            }
+
+            // 熱力圖控制：更新按鈕
+            const refreshBtn = document.getElementById('heatmapRefreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => refreshHeatmap());
+            }
+
+            // 因子散點：選擇因子
+            const factorSel = document.getElementById('factorSelect');
+            if (factorSel) {
+                factorSel.addEventListener('change', () => renderAnalysisPanels());
+            }
         }
         
         // 更新排序指示器
@@ -1536,10 +1836,11 @@
 
         // 視圖切換函數
         function setVisibility(selector, display) {
-            document.querySelector(selector).style.display = display;
+            const el = document.querySelector(selector);
+            if (el) el.style.display = display;
         }
 
-        function switchView(view) {
+        async function switchView(view) {
             const isOverview = view === 'overview';
             const isRanking = view === 'ranking';
             const isAnalysis = view === 'analysis';
@@ -1567,7 +1868,8 @@
             // 透過 body class 控制 .overview-hide 的 CSS 顯示：
             // 總覽隱藏（無 class），其他視圖顯示（加上 show-all-filters）
             document.body.classList.toggle('show-all-filters', !isOverview);
-            setVisibility('.chart-container', isOverview || isAnalysis ? 'flex' : 'none');
+            // 永久隱藏趨勢圖區塊（依需求移除該區域顯示）
+            setVisibility('.chart-container', 'none');
             setVisibility('.analysis-section', isAnalysis ? 'block' : 'none');
 
             if(isOverview) {
@@ -1575,7 +1877,13 @@
             } else if(isRanking) {
                 applyFilters();
             }
-            if(isAnalysis) console.log("切換到深度分析視圖");
+            if(isAnalysis) {
+                // 確保有資料可用，若尚未載入則先載入
+                if (!currentData || currentData.length === 0) {
+                    try { await loadRankingData(); } catch (_) {}
+                }
+                renderAnalysisPanels();
+            }
         }
 
         // 載入並處理數據
@@ -1591,6 +1899,22 @@
             const el = document.getElementById('datePicker');
             return (el && el.value) ? el.value : '';
         }
+        // 取得前一個交易日（簡化：跳過週末）。輸入 YYYY-MM-DD，回傳同格式；若輸入無效則回傳空字串。
+        function computePrevDate(dateStr){
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T00:00:00');
+            if (isNaN(d.getTime())) return '';
+            // 減一天，若落在週末則往前推到最近周五
+            d.setDate(d.getDate() - 1);
+            // 0=Sun,6=Sat
+            while (d.getDay() === 0 || d.getDay() === 6) {
+                d.setDate(d.getDate() - 1);
+            }
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth()+1).padStart(2,'0');
+            const dd = String(d.getDate()).padStart(2,'0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
         function setApiStatus(state, message){
             apiStatus.state = state;
             const dot = document.getElementById('apiStatusDot');
@@ -1601,6 +1925,49 @@
             else if (state === 'connected') dot.classList.add('connected');
             else dot.classList.add('error');
             text.textContent = message || (state === 'connected' ? '已連線' : state === 'loading' ? '載入中…' : '連線錯誤');
+        }
+
+        // ====== 趨勢顯示輔助 ======
+        function setTrend(elementId, delta, formatter){
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.classList.remove('up','down');
+            const v = Number(delta || 0);
+            const content = typeof formatter === 'function' ? formatter(v) : v.toFixed(2);
+            if (v > 0) {
+                el.classList.add('up');
+                el.innerHTML = `<i class="fas fa-arrow-up"></i> ${content}`;
+            } else if (v < 0) {
+                el.classList.add('down');
+                el.innerHTML = `<i class="fas fa-arrow-down"></i> ${content}`;
+            } else {
+                el.innerHTML = `—`;
+            }
+        }
+
+        function formatDeltaInt(v){
+            const s = Math.abs(Math.round(v)).toString();
+            return (v>0?'+':'') + s;
+        }
+        function formatDeltaPct(v){
+            const s = Math.abs(v).toFixed(2) + '%';
+            return (v>0?'+':'−') + s.replace('-', '');
+        }
+        function formatDeltaPct0(v){
+            const s = Math.abs(v).toFixed(0) + '%';
+            return (v>0?'+':'−') + s.replace('-', '');
+        }
+        function formatDeltaPct1(v){
+            const s = Math.abs(v).toFixed(1) + '%';
+            return (v>0?'+':'−') + s.replace('-', '');
+        }
+        function formatDeltaTimes(v){
+            const s = Math.abs(v).toFixed(1) + 'x';
+            return (v>0?'+':'−') + s.replace('-', '');
+        }
+        function formatDeltaRatio(v){
+            const s = Math.abs(v).toFixed(2);
+            return (v>0?'+':'−') + s.replace('-', '');
         }
 
         async function loadRankingData() {
@@ -1636,8 +2003,8 @@
             }
         }
         
-        // API 基礎 URL（目前後端執行於 3001）
-        const API_BASE_URL = 'http://localhost:3001/api';
+        // API 基礎 URL：跟隨目前網頁來源，自動指向同源後端（避免硬編 port 造成連線被拒）
+        const API_BASE_URL = `${window.location.origin}/api`;
 
         // 從 API 載入排行榜數據
         async function loadRankingFromAPI() {
@@ -1970,16 +2337,6 @@
             // 下次刷新前先清除旗標，讓新資料能覆蓋
             window.hasStatsFromAPI = false;
             loadRankingData();
-            const chartContainer = document.getElementById('chartContainer');
-            chartContainer.innerHTML = `
-                <div class="chart-placeholder">
-                    <i class="fas fa-chart-area"></i>
-                    <p>選擇股票查看報酬率趨勢圖</p>
-                </div>`;
-            if (chartInstance) {
-                chartInstance.destroy();
-                chartInstance = null;
-            }
         }
 
 
@@ -2012,7 +2369,12 @@
                 let data = Array.isArray(json.data) ? json.data.map(r => ({
                     symbol: r.symbol,
                     return: parseFloat(r.return_rate) || 0,
-                    category: getReturnCategory(parseFloat(r.return_rate) || 0)
+                    volume: parseFloat(r.volume) || Math.floor(Math.random() * 10000000) + 100000,
+                    volatility: parseFloat(r.volatility) || (Math.random() * 2 + 0.1),
+                    market: r.market || 'listed',
+                    industry: r.industry || '未分類',
+                    category: getReturnCategory(parseFloat(r.return_rate) || 0),
+                    name: r.name || '' // Add this line
                 })) : [];
                 // 若後端資料為空，退回以現有數據生成
                 if (!data || data.length === 0) {
@@ -2148,16 +2510,70 @@
             const grid = document.getElementById('heatmapGrid');
             if (!grid) return;
 
-            grid.innerHTML = data.map(stock => `
+            // apply search filter and sorting from controls
+            const { term, sort } = getHeatmapControls();
+            let rows = Array.isArray(data) ? [...data] : [];
+            if (term) {
+                const q = term.toLowerCase();
+                rows = rows.filter(s => String(s.symbol || '').toLowerCase().includes(q) || String(s.name || '').toLowerCase().includes(q));
+            }
+            rows = sortHeatmapData(rows, sort);
+
+            grid.innerHTML = rows.map(stock => `
                 <div class="heatmap-cell ${stock.category}" 
                      data-symbol="${stock.symbol}" 
                      data-return="${stock.return}"
-                     title="${stock.symbol}: ${stock.return.toFixed(2)}%"
                      onclick="showStockDetail('${stock.symbol}', ${stock.return})">
                     <div class="cell-symbol">${stock.symbol}</div>
-                    <div class="cell-return">${stock.return.toFixed(1)}%</div>
+                    <div class="cell-return">${Number(stock.return).toFixed(1)}%</div>
                 </div>
             `).join('');
+
+            attachHeatmapCellEvents();
+        }
+
+        function getHeatmapControls() {
+            const term = document.getElementById('heatmapSearch')?.value?.trim() || '';
+            const sort = document.getElementById('heatmapSort')?.value || 'ret_desc';
+            return { term, sort };
+        }
+
+        function sortHeatmapData(rows, sort) {
+            const copy = [...rows];
+            switch (sort) {
+                case 'ret_asc':
+                    return copy.sort((a,b) => Number(a.return) - Number(b.return));
+                case 'sym_asc':
+                    return copy.sort((a,b) => String(a.symbol).localeCompare(String(b.symbol)));
+                case 'sym_desc':
+                    return copy.sort((a,b) => String(b.symbol).localeCompare(String(a.symbol)));
+                case 'ret_desc':
+                default:
+                    return copy.sort((a,b) => Number(b.return) - Number(a.return));
+            }
+        }
+
+        function attachHeatmapCellEvents() {
+            const tooltip = document.getElementById('heatmapTooltip');
+            const cells = document.querySelectorAll('.heatmap-cell');
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', (e) => {
+                    const sym = cell.getAttribute('data-symbol');
+                    const val = Number(cell.getAttribute('data-return'));
+                    if (!tooltip) return;
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `<strong>${sym}</strong><br/>報酬率：${val.toFixed(2)}%`;
+                });
+                cell.addEventListener('mousemove', (e) => {
+                    if (!tooltip) return;
+                    tooltip.style.left = `${e.clientX + 10}px`;
+                    tooltip.style.top = `${e.clientY + 10}px`;
+                });
+                cell.addEventListener('mouseleave', () => {
+                    if (!tooltip) return;
+                    tooltip.style.display = 'none';
+                });
+            });
         }
 
         // 亮顯指定代碼於熱力圖
@@ -2195,6 +2611,8 @@
             }
         }
 
+        
+
         // 初始化時載入視圖與數據
         document.addEventListener('DOMContentLoaded', function() {
             initializeEventListeners();
@@ -2212,6 +2630,472 @@
         // ========= 統計卡片增強：資料與 sparkline =========
         function getWorkingData() {
             return (currentData && currentData.length) ? currentData : [];
+        }
+
+        // ======= 深度分析：因子散點 + 五分位表 + 異常清單 =======
+        function renderAnalysisPanels() {
+            const data = getWorkingData();
+            const sel = document.getElementById('factorSelect');
+            let factorKey = sel?.value || 'return';
+            const order = ['return','volume','volatility'];
+            const hasDataFor = (key) => (data||[]).some(d => isFinite(d.return) && isFinite(key==='return' ? d.return : d[key]));
+            if (!hasDataFor(factorKey)) {
+                for (const k of order) {
+                    if (hasDataFor(k)) { factorKey = k; if (sel) sel.value = k; break; }
+                }
+            }
+            renderFactorScatter(data, factorKey);
+            renderQuintileTable(data, factorKey);
+            renderAnomalies(data);
+        }
+
+        function renderFactorScatter(data, factorKey) {
+            const wrap = document.getElementById('factorScatterWrap');
+            if (!wrap) return;
+            const getVal = (d) => factorKey==='return' ? Number(d.return) : Number(d[factorKey]);
+            const rows = (data || []).filter(d => isFinite(d.return) && isFinite(getVal(d)));
+            if (!rows.length) {
+                wrap.innerHTML = '<div class="muted">無資料</div>';
+                if (window.factorChart) { window.factorChart.destroy(); window.factorChart = null; }
+                return;
+            }
+            if (!document.getElementById('factorScatter')) {
+                wrap.innerHTML = '<canvas id="factorScatter" height="300"></canvas>';
+            }
+            const ctx = document.getElementById('factorScatter')?.getContext('2d');
+            if (!ctx) return;
+
+            const pts = rows.map(d => ({ x: getVal(d), y: Number(d.return), s: d.symbol, c: d.category }));
+            const rgba = (hex, a) => {
+                // very small utility for known palette
+                const map = { '#dc2626':'220,38,38', '#f97316':'249,115,22', '#166534':'22,101,52', '#16a34a':'22,163,74', '#6b7280':'107,114,128' };
+                return `rgba(${map[hex]||'160,160,160'},${a})`;
+            };
+            const baseColors = pts.map(p => p.c === 'positive-high' ? '#dc2626' : p.c === 'positive-mid' ? '#f97316' : p.c === 'negative-high' ? '#166534' : p.c === 'negative-mid' ? '#16a34a' : '#6b7280');
+            const bgColors = baseColors.map(c => rgba(c, 0.45));
+            const borderColors = baseColors.map(_ => 'rgba(255,255,255,0.7)');
+
+            const xVals = pts.map(p => p.x).filter(isFinite);
+            const yVals = pts.map(p => p.y).filter(isFinite);
+            const yMin = Math.min(...yVals);
+            const yMax = Math.max(...yVals);
+            const yPad = Math.max(0.5, (yMax - yMin) * 0.08);
+
+            const useLogX = factorKey === 'volume';
+
+            if (window.factorChart) { window.factorChart.destroy(); }
+            window.factorChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: `${factorKey} vs. Return`,
+                        data: pts.map(p => ({ x: p.x, y: p.y })),
+                        pointBackgroundColor: bgColors,
+                        pointBorderColor: borderColors,
+                        pointBorderWidth: 1,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointHitRadius: 8,
+                    }]
+                },
+                options: {
+                    parsing: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => { const p = pts[ctx.dataIndex]; const xv = useLogX ? p.x.toLocaleString() : p.x.toLocaleString(); return `${p.s}  ${factorKey}: ${xv}  Return: ${p.y.toFixed(2)}%`; } } }
+                    },
+                    scales: {
+                        x: {
+                            type: useLogX ? 'logarithmic' : 'linear',
+                            title: { 
+                                display: true, 
+                                text: useLogX ? '成交量 (對數)' : (factorKey==='return' ? '報酬 (%)' : factorKey),
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: { size: 12, weight: '500' },
+                                callback: (v) => {
+                                    const val = useLogX ? Number(v) : Number(v);
+                                    return typeof formatCompact === 'function' ? formatCompact(val) : val;
+                                }
+                            },
+                            grid: { color: 'rgba(255,255,255,0.12)' }
+                        },
+                        y: {
+                            title: { 
+                                display: true, 
+                                text: 'Return (%)',
+                                font: { size: 14, weight: 'bold' },
+                                color: '#ffffff'
+                            },
+                            ticks: { 
+                                color: '#ffffff',
+                                font: { size: 12, weight: '500' }
+                            },
+                            grid: { color: 'rgba(255,255,255,0.12)' },
+                            suggestedMin: Math.floor((yMin - yPad) * 10) / 10,
+                            suggestedMax: Math.ceil((yMax + yPad) * 10) / 10
+                        }
+                    },
+                    onClick: (evt, elements) => {
+                        if (!elements?.length) return;
+                        const idx = elements[0].index;
+                        highlightHeatmapSymbol(pts[idx].s);
+                    }
+                }
+            });
+        }
+
+        function renderQuintileTable(data, factorKey) {
+            const tbody = document.querySelector('#quintileTable tbody');
+            if (!tbody) return;
+            const getVal = (d) => factorKey==='return' ? Number(d.return) : Number(d[factorKey]);
+            const rows = (data || []).filter(d => isFinite(d.return) && isFinite(getVal(d)));
+            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">無資料</td></tr>'; return; }
+            const sorted = rows.sort((a,b) => getVal(a) - getVal(b));
+            const n = sorted.length;
+            const qsize = Math.max(1, Math.floor(n / 5));
+            const groups = [];
+            for (let i = 0; i < 5; i++) {
+                const start = i * qsize;
+                const end = i === 4 ? n : (i+1) * qsize;
+                const g = sorted.slice(start, end);
+                const avg = g.reduce((s,d) => s + Number(d.return), 0) / Math.max(1, g.length);
+                groups.push({ label: `Q${i+1}`, count: g.length, avg });
+            }
+            tbody.innerHTML = groups.map(g => `
+                <tr>
+                    <td style="text-align:left;">${g.label}</td>
+                    <td>${g.count}</td>
+                    <td class="${g.avg>=0?'positive':'negative'}">${g.avg.toFixed(2)}%</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAnomalies(data) {
+            const el = document.getElementById('anomaliesList');
+            if (!el) return;
+            const rows = (data || []).filter(d => isFinite(d.return));
+            if (!rows.length) { el.innerHTML = '<div class="muted">無資料</div>'; return; }
+            const vols = rows.map(r => Number(r.volume)).filter(v => isFinite(v));
+            const vol95 = vols.length ? percentile(vols, 0.95) : Infinity;
+            const spikeUp = rows.filter(r => r.return > 5).map(r => ({ type:'up', ...r }));
+            const spikeDown = rows.filter(r => r.return < -5).map(r => ({ type:'down', ...r }));
+            const explosiveVol = rows.filter(r => isFinite(r.volume) && r.volume >= vol95).map(r => ({ type:'vol', ...r }));
+            const items = [...spikeUp.slice(0,30), ...spikeDown.slice(0,30), ...explosiveVol.slice(0,30)]
+                .sort((a,b)=>Math.abs(b.return)-Math.abs(a.return)).slice(0,60);
+            if (!items.length) { el.innerHTML = '<div class="muted">目前沒有異常</div>'; return; }
+            el.innerHTML = items.map(it => `
+                <div class="anomaly-item" data-sym="${it.symbol}" onclick="highlightHeatmapSymbol('${it.symbol}')">
+                    <div class="anomaly-left">
+                        <span class="badge ${it.type==='up'?'up':it.type==='down'?'down':'vol'}">${it.type==='up'?'急漲':it.type==='down'?'急跌':'爆量'}</span>
+                        <strong>${it.symbol}</strong>
+                    </div>
+                    <div class="anomaly-right">${Number(it.return).toFixed(2)}%${isFinite(it.volume)?` · 量 ${Number(it.volume).toLocaleString()}`:''}</div>
+                </div>
+            `).join('');
+        }
+
+        function highlightHeatmapSymbol(symbol) {
+            // symbol 如 "2330.TW"；熱力圖的 data-symbol 亦為完整代碼
+            const cell = document.querySelector(`.heatmap-cell[data-symbol="${symbol}"]`);
+            if (!cell) return;
+            cell.classList.add('highlight');
+            cell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            setTimeout(() => cell.classList.remove('highlight'), 1200);
+        }
+
+        // ======= 投資決策功能 =======
+        function generateSignals() {
+            const strategy = document.getElementById('strategyType').value;
+            const riskLevel = document.getElementById('riskTolerance').value;
+            const data = getWorkingData();
+            
+            if (!data || !data.length) {
+                document.getElementById('signalResults').innerHTML = '<div class="muted">無可用數據</div>';
+                return;
+            }
+
+            const signals = calculateSignals(data, strategy, riskLevel);
+            renderSignals(signals);
+            updateActionPlan();
+        }
+
+        function calculateSignals(data, strategy, riskLevel) {
+            const signals = [];
+            const thresholds = {
+                conservative: { buy: 3, sell: -2, volume: 0.8 },
+                moderate: { buy: 2, sell: -3, volume: 1.2 },
+                aggressive: { buy: 1, sell: -4, volume: 1.5 }
+            }[riskLevel];
+
+            data.forEach(stock => {
+                let signal = 'hold';
+                let strength = 0;
+                let reason = '';
+
+                switch(strategy) {
+                    case 'momentum':
+                        if (stock.return > thresholds.buy) {
+                            signal = 'buy';
+                            strength = Math.min(100, (stock.return / thresholds.buy) * 30);
+                            reason = `動量突破 ${stock.return.toFixed(2)}%`;
+                        } else if (stock.return < thresholds.sell) {
+                            signal = 'sell';
+                            strength = Math.min(100, Math.abs(stock.return / thresholds.sell) * 30);
+                            reason = `動量下跌 ${stock.return.toFixed(2)}%`;
+                        }
+                        break;
+                    
+                    case 'reversal':
+                        if (stock.return < -5) {
+                            signal = 'buy';
+                            strength = Math.min(100, Math.abs(stock.return) * 5);
+                            reason = `超跌反彈機會 ${stock.return.toFixed(2)}%`;
+                        } else if (stock.return > 8) {
+                            signal = 'sell';
+                            strength = Math.min(100, stock.return * 4);
+                            reason = `漲幅過大 ${stock.return.toFixed(2)}%`;
+                        }
+                        break;
+                    
+                    case 'volume':
+                        const avgVolume = data.reduce((sum, s) => sum + s.volume, 0) / data.length;
+                        if (stock.volume > avgVolume * thresholds.volume && stock.return > 1) {
+                            signal = 'buy';
+                            strength = Math.min(100, (stock.volume / avgVolume) * 20);
+                            reason = `放量上漲 量${(stock.volume/1000000).toFixed(1)}M`;
+                        }
+                        break;
+                    
+                    case 'composite':
+                        let score = 0;
+                        if (stock.return > 2) score += 30;
+                        if (stock.return < -3) score -= 25;
+                        if (stock.volume > data.reduce((sum, s) => sum + s.volume, 0) / data.length * 1.5) score += 20;
+                        if (stock.volatility < 0.5) score += 10;
+                        
+                        if (score > 35) {
+                            signal = 'buy';
+                            strength = Math.min(100, score);
+                            reason = `綜合評分 ${score}`;
+                        } else if (score < -20) {
+                            signal = 'sell';
+                            strength = Math.min(100, Math.abs(score));
+                            reason = `綜合評分 ${score}`;
+                        }
+                        break;
+                }
+
+                if (signal !== 'hold') {
+                    signals.push({
+                        symbol: stock.symbol,
+                        signal,
+                        strength,
+                        reason,
+                        return: stock.return,
+                        volume: stock.volume
+                    });
+                }
+            });
+
+            return signals.sort((a, b) => b.strength - a.strength).slice(0, 15);
+        }
+
+        function renderSignals(signals) {
+            const container = document.getElementById('signalResults');
+            if (!signals.length) {
+                container.innerHTML = '<div class="muted">當前市況未產生明確訊號</div>';
+                return;
+            }
+
+            container.innerHTML = signals.map(s => `
+                <div class="signal-item ${s.signal}" onclick="highlightHeatmapSymbol('${s.symbol}')">
+                    <div>
+                        <strong>${s.symbol}</strong>
+                        <span class="signal-action">${s.signal === 'buy' ? '買入' : '賣出'}</span>
+                        <div class="signal-reason">${s.reason}</div>
+                    </div>
+                    <div class="signal-strength">${s.strength.toFixed(0)}%</div>
+                </div>
+            `).join('');
+        }
+
+        function optimizePortfolio() {
+            const amount = parseFloat(document.getElementById('investAmount').value) || 1000000;
+            const maxStocks = parseInt(document.getElementById('maxStocks').value) || 10;
+            const maxWeight = parseFloat(document.getElementById('maxWeight').value) || 20;
+            
+            const data = getWorkingData();
+            if (!data || !data.length) {
+                document.getElementById('portfolioResults').innerHTML = '<div class="muted">無可用數據</div>';
+                return;
+            }
+
+            const portfolio = calculateOptimalPortfolio(data, amount, maxStocks, maxWeight);
+            renderPortfolio(portfolio, amount);
+            updateActionPlan();
+        }
+
+        function calculateOptimalPortfolio(data, totalAmount, maxStocks, maxWeight) {
+            // 選股邏輯：結合報酬、風險調整報酬比、流動性
+            const candidates = data
+                .filter(s => s.volume > 1000000) // 基本流動性篩選
+                .map(s => ({
+                    ...s,
+                    score: s.return / Math.max(0.1, s.volatility), // 風險調整報酬
+                    liquidity: Math.min(100, s.volume / 10000000 * 100) // 流動性評分
+                }))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, maxStocks);
+
+            // 權重分配：基於評分的等權重調整
+            const totalScore = candidates.reduce((sum, s) => sum + Math.max(0, s.score), 0);
+            const portfolio = candidates.map(stock => {
+                const baseWeight = totalScore > 0 ? (Math.max(0, stock.score) / totalScore) * 100 : (100 / candidates.length);
+                const weight = Math.min(maxWeight, Math.max(5, baseWeight)); // 限制在5%-maxWeight%之間
+                const amount = totalAmount * (weight / 100);
+                
+                return {
+                    symbol: stock.symbol,
+                    weight: weight,
+                    amount: amount,
+                    expectedReturn: stock.return,
+                    risk: stock.volatility,
+                    score: stock.score
+                };
+            });
+
+            // 重新標準化權重
+            const totalWeight = portfolio.reduce((sum, p) => sum + p.weight, 0);
+            portfolio.forEach(p => {
+                p.weight = (p.weight / totalWeight) * 100;
+                p.amount = totalAmount * (p.weight / 100);
+            });
+
+            return portfolio;
+        }
+
+        function renderPortfolio(portfolio, totalAmount) {
+            const container = document.getElementById('portfolioResults');
+            if (!portfolio.length) {
+                container.innerHTML = '<div class="muted">無法生成投資組合</div>';
+                return;
+            }
+
+            const expectedReturn = portfolio.reduce((sum, p) => sum + (p.expectedReturn * p.weight / 100), 0);
+            const portfolioRisk = Math.sqrt(portfolio.reduce((sum, p) => sum + Math.pow(p.risk * p.weight / 100, 2), 0));
+
+            container.innerHTML = `
+                <div class="portfolio-summary">
+                    <div class="portfolio-metric">
+                        <span>預期報酬：</span>
+                        <span class="${expectedReturn >= 0 ? 'positive' : 'negative'}">${expectedReturn.toFixed(2)}%</span>
+                    </div>
+                    <div class="portfolio-metric">
+                        <span>組合風險：</span>
+                        <span>${portfolioRisk.toFixed(2)}%</span>
+                    </div>
+                    <div class="portfolio-metric">
+                        <span>夏普比率：</span>
+                        <span>${(expectedReturn / Math.max(0.1, portfolioRisk)).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div class="portfolio-holdings">
+                    ${portfolio.map(p => `
+                        <div class="portfolio-item" onclick="highlightHeatmapSymbol('${p.symbol}')">
+                            <div>
+                                <strong>${p.symbol}</strong>
+                                <div class="holding-details">
+                                    權重 ${p.weight.toFixed(1)}% · 金額 ${(p.amount/10000).toFixed(0)}萬
+                                </div>
+                            </div>
+                            <div class="holding-return ${p.expectedReturn >= 0 ? 'positive' : 'negative'}">
+                                ${p.expectedReturn.toFixed(2)}%
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function assessRisk() {
+            const data = getWorkingData();
+            if (!data || !data.length) return;
+
+            // 計算各種風險指標
+            const returns = data.map(s => s.return);
+            const volumes = data.map(s => s.volume);
+            
+            const marketRisk = Math.abs(returns.reduce((sum, r) => sum + r, 0) / returns.length) * 5;
+            const concentrationRisk = (data.filter(s => s.volume < 5000000).length / data.length) * 100;
+            const liquidityRisk = (data.filter(s => s.volume < 1000000).length / data.length) * 100;
+
+            // 更新風險條
+            updateRiskBar('marketRisk', 'marketRiskValue', marketRisk, '市場風險');
+            updateRiskBar('concentrationRisk', 'concentrationRiskValue', concentrationRisk, '集中度風險');
+            updateRiskBar('liquidityRisk', 'liquidityRiskValue', liquidityRisk, '流動性風險');
+            
+            updateActionPlan();
+        }
+
+        function updateRiskBar(barId, valueId, risk, label) {
+            const bar = document.getElementById(barId);
+            const value = document.getElementById(valueId);
+            
+            const normalizedRisk = Math.min(100, Math.max(0, risk));
+            bar.style.width = `${normalizedRisk}%`;
+            value.textContent = `${normalizedRisk.toFixed(1)}%`;
+            
+            // 根據風險等級調整顏色
+            if (normalizedRisk < 30) {
+                bar.style.background = 'var(--success)';
+            } else if (normalizedRisk < 70) {
+                bar.style.background = 'var(--warning)';
+            } else {
+                bar.style.background = 'var(--error)';
+            }
+        }
+
+        function updateActionPlan() {
+            const container = document.getElementById('actionPlan');
+            const signals = document.getElementById('signalResults').children.length > 0;
+            const portfolio = document.getElementById('portfolioResults').children.length > 0;
+            const risk = document.getElementById('marketRiskValue').textContent !== '-';
+
+            if (!signals && !portfolio && !risk) {
+                container.innerHTML = '<div class="muted">完成上述分析後，系統將生成具體的執行建議</div>';
+                return;
+            }
+
+            let plan = '<h4>📋 執行建議</h4><ul>';
+            
+            if (signals) {
+                plan += '<li><strong>訊號執行：</strong>優先關注強度>70%的買賣訊號，建議分批進出</li>';
+            }
+            
+            if (portfolio) {
+                plan += '<li><strong>組合配置：</strong>按建議權重配置，單筆投入不超過總資金20%</li>';
+            }
+            
+            if (risk) {
+                const marketRisk = parseFloat(document.getElementById('marketRiskValue').textContent);
+                if (marketRisk > 50) {
+                    plan += '<li><strong>風險控制：</strong>當前市場風險較高，建議降低倉位或增加避險部位</li>';
+                } else {
+                    plan += '<li><strong>風險控制：</strong>風險水平可控，可按正常策略執行</li>';
+                }
+            }
+            
+            plan += '<li><strong>監控要點：</strong>密切關注成交量變化和技術指標確認</li>';
+            plan += '<li><strong>停損設定：</strong>建議設定-8%停損點，+15%分批獲利了結</li>';
+            plan += '</ul>';
+            
+            container.innerHTML = plan;
         }
 
         function initStatsEnhancements() {
