@@ -52,6 +52,10 @@
             align-items: center;
             gap: 0.5rem;
         }
+        /* 量化分組柱狀圖字體放大 */
+        .analysis-card.quant-bars h3 { font-size: 1.35rem; }
+        .analysis-card.quant-bars .factor-controls label { font-size: 1rem; }
+        .analysis-card.quant-bars .filter-input { font-size: 1rem; padding: 0.6rem 0.75rem; }
         .quintile-table {
             width: 100%;
             border-collapse: collapse;
@@ -1499,34 +1503,35 @@
             <!-- 深度分析 -->
             <section class="analysis-section" style="display:none">
                 <div class="analysis-grid">
-                    <div class="analysis-card">
-                        <h3><i class="fas fa-chart-scatter"></i> 因子散點圖</h3>
-                        <div class="factor-controls">
-                            <label>因子選擇：</label>
-                            <select id="factorSelect" class="filter-input" style="width:120px;">
-                                <option value="return">報酬</option>
-                                <option value="volume">成交量</option>
-                                <option value="volatility">波動</option>
-                            </select>
-                        </div>
-                        <div id="factorScatterWrap" style="height:280px;margin-top:10px;">
+                    <div class="analysis-card quant-bars">
+                        <h3 style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+                            <span><i class="fas fa-chart-bar"></i> 量化分組柱狀圖</span>
+                            <span class="factor-controls" style="gap:.5rem;opacity:.95;">
+                                <label style="font-size:.85rem;color:var(--text-secondary)">因子</label>
+                                <select id="quantFactorSelect" class="filter-input" style="width:120px;padding:.4rem .6rem;">
+                                    <option value="return">報酬</option>
+                                    <option value="volume">成交量</option>
+                                    <option value="volatility">波動</option>
+                                </select>
+                                <label style="font-size:.85rem;color:var(--text-secondary)">組數</label>
+                                <select id="quantBucketSelect" class="filter-input" style="width:110px;padding:.4rem .6rem;">
+                                    <option value="10" selected>10 (Decile)</option>
+                                    <option value="5">5 (Quintile)</option>
+                                </select>
+                                <label style="font-size:.85rem;color:var(--text-secondary)">度量</label>
+                                <select id="quantMetricSelect" class="filter-input" style="width:130px;padding:.4rem .6rem;">
+                                    <option value="avg" selected>平均報酬</option>
+                                    <option value="ir">IR</option>
+                                </select>
+                            </span>
+                        </h3>
+                        <div id="quantBarWrap" style="height:300px;margin-top:10px;">
                             <div class="muted">載入中...</div>
                         </div>
+                        <div id="quantTopList" class="anomaly-list" style="margin-top:10px;display:none"></div>
                     </div>
                     
-                    <div class="analysis-card">
-                        <h3><i class="fas fa-layer-group"></i> 五分位分析</h3>
-                        <table class="quintile-table" id="quintileTable">
-                            <thead>
-                                <tr><th>分組</th><th>樣本數</th><th>平均報酬</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td colspan="3" style="text-align:center;color:var(--text-muted)">載入中...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="analysis-card">
+                    <div class="analysis-card" style="margin-top:16px;">
                         <h3><i class="fas fa-exclamation-triangle"></i> 市場異常</h3>
                         <div class="anomaly-list" id="anomaliesList">
                             <div class="muted">載入中...</div>
@@ -1812,11 +1817,14 @@
                 refreshBtn.addEventListener('click', () => refreshHeatmap());
             }
 
-            // 因子散點：選擇因子
-            const factorSel = document.getElementById('factorSelect');
-            if (factorSel) {
-                factorSel.addEventListener('change', () => renderAnalysisPanels());
-            }
+            // 已移除：因子散點圖與五分位分析之因子選擇監聽
+            // 量化分組柱狀圖：參數變更即重算
+            const qFactor = document.getElementById('quantFactorSelect');
+            const qBucket = document.getElementById('quantBucketSelect');
+            const qMetric = document.getElementById('quantMetricSelect');
+            [qFactor, qBucket, qMetric].forEach(el => {
+                if (el) el.addEventListener('change', () => renderAnalysisPanels());
+            });
         }
         
         // 更新排序指示器
@@ -1846,7 +1854,8 @@
             const isAnalysis = view === 'analysis';
 
             setVisibility('.stats-grid', isOverview ? 'grid' : 'none');
-            setVisibility('.filter-panel', isOverview || isRanking || isAnalysis ? 'block' : 'none');
+            // 深度分析頁面不顯示全域篩選器
+            setVisibility('.filter-panel', (isOverview || isRanking) ? 'block' : 'none');
             setVisibility('.heatmap-container', isOverview ? 'block' : 'none');
             setVisibility('.ranking-table-container', isRanking ? 'block' : 'none');
 
@@ -2632,147 +2641,176 @@
             return (currentData && currentData.length) ? currentData : [];
         }
 
-        // ======= 深度分析：因子散點 + 五分位表 + 異常清單 =======
+        // ======= 深度分析：量化分組柱狀圖 + 異常清單 =======
         function renderAnalysisPanels() {
             const data = getWorkingData();
-            const sel = document.getElementById('factorSelect');
-            let factorKey = sel?.value || 'return';
-            const order = ['return','volume','volatility'];
-            const hasDataFor = (key) => (data||[]).some(d => isFinite(d.return) && isFinite(key==='return' ? d.return : d[key]));
-            if (!hasDataFor(factorKey)) {
-                for (const k of order) {
-                    if (hasDataFor(k)) { factorKey = k; if (sel) sel.value = k; break; }
-                }
-            }
-            renderFactorScatter(data, factorKey);
-            renderQuintileTable(data, factorKey);
+            renderQuantBarChart(data);
             renderAnomalies(data);
         }
 
-        function renderFactorScatter(data, factorKey) {
-            const wrap = document.getElementById('factorScatterWrap');
+        function renderQuantBarChart(data) {
+            const wrap = document.getElementById('quantBarWrap');
             if (!wrap) return;
-            const getVal = (d) => factorKey==='return' ? Number(d.return) : Number(d[factorKey]);
+            // 重新繪圖時先隱藏 Top N 區塊
+            const topList = document.getElementById('quantTopList');
+            if (topList) { topList.style.display = 'none'; topList.innerHTML = ''; }
+            // 讀取控制項
+            const factorKey = document.getElementById('quantFactorSelect')?.value || 'return';
+            const bucketCount = parseInt(document.getElementById('quantBucketSelect')?.value || '10', 10);
+            const metric = document.getElementById('quantMetricSelect')?.value || 'avg';
+
+            const getVal = (d) => factorKey === 'return' ? Number(d.return) : Number(d[factorKey]);
             const rows = (data || []).filter(d => isFinite(d.return) && isFinite(getVal(d)));
             if (!rows.length) {
                 wrap.innerHTML = '<div class="muted">無資料</div>';
-                if (window.factorChart) { window.factorChart.destroy(); window.factorChart = null; }
+                if (window.quantBarChart) { window.quantBarChart.destroy(); window.quantBarChart = null; }
                 return;
             }
-            if (!document.getElementById('factorScatter')) {
-                wrap.innerHTML = '<canvas id="factorScatter" height="300"></canvas>';
+            if (!document.getElementById('quantBarCanvas')) {
+                wrap.innerHTML = '<canvas id="quantBarCanvas" height="300"></canvas>';
             }
-            const ctx = document.getElementById('factorScatter')?.getContext('2d');
+            const ctx = document.getElementById('quantBarCanvas')?.getContext('2d');
             if (!ctx) return;
 
-            const pts = rows.map(d => ({ x: getVal(d), y: Number(d.return), s: d.symbol, c: d.category }));
-            const rgba = (hex, a) => {
-                // very small utility for known palette
-                const map = { '#dc2626':'220,38,38', '#f97316':'249,115,22', '#166534':'22,101,52', '#16a34a':'22,163,74', '#6b7280':'107,114,128' };
-                return `rgba(${map[hex]||'160,160,160'},${a})`;
+            // 依因子值排序並做等人數分組（分位數切分）
+            const sorted = [...rows].sort((a, b) => getVal(a) - getVal(b));
+            const n = sorted.length;
+            const base = Math.floor(n / bucketCount);
+            const groups = [];
+            for (let i = 0, start = 0; i < bucketCount; i++) {
+                let size = (i < bucketCount - 1) ? base : (n - start);
+                if (size <= 0) size = 0;
+                const g = sorted.slice(start, start + size);
+                start += size;
+                const returns = g.map(x => Number(x.return)).filter(isFinite);
+                const mean = returns.reduce((s, v) => s + v, 0) / Math.max(1, returns.length);
+                const variance = returns.length > 1 ? returns.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (returns.length - 1) : 0;
+                const stdev = Math.sqrt(variance);
+                const ir = stdev > 0 ? (mean / stdev) : 0;
+                groups.push({ label: `Q${i+1}`, count: g.length, mean, ir, items: g });
+            }
+
+            const metricKey = metric === 'ir' ? 'ir' : 'mean';
+            const labels = groups.map(g => `${g.label} (n=${g.count})`);
+            const values = groups.map(g => Number.isFinite(g[metricKey]) ? g[metricKey] : 0);
+
+            // 科技感樣式：平均報酬使用正負漸層，IR 使用青色系
+            const posGrad = ctx.createLinearGradient(0, 0, 0, 300);
+            posGrad.addColorStop(0, 'rgba(0, 255, 200, 0.9)');
+            posGrad.addColorStop(1, 'rgba(0, 180, 255, 0.6)');
+            const negGrad = ctx.createLinearGradient(0, 0, 0, 300);
+            negGrad.addColorStop(0, 'rgba(255, 120, 160, 0.9)');
+            negGrad.addColorStop(1, 'rgba(255, 80, 120, 0.6)');
+            const cyanGrad = ctx.createLinearGradient(0, 0, 0, 300);
+            cyanGrad.addColorStop(0, 'rgba(0, 212, 255, 0.95)');
+            cyanGrad.addColorStop(1, 'rgba(0, 160, 255, 0.6)');
+            const colors = metricKey === 'ir' ? values.map(_ => cyanGrad) : values.map(v => v >= 0 ? posGrad : negGrad);
+            const borderColors = metricKey === 'ir' ? values.map(_ => 'rgba(0, 212, 255, 1)') : values.map(v => v >= 0 ? 'rgba(0, 255, 200, 1)' : 'rgba(255, 120, 160, 1)');
+
+            const ymax = Math.max(2, Math.max(...values.map(v => Math.abs(v))) * 1.2);
+            const yMin = metricKey === 'ir' ? 0 : -Math.max(1, ymax * 0.4);
+
+            // 自訂插件：標籤
+            const labelPlugin = {
+                id: 'quantLabels',
+                afterDatasetsDraw(chart) {
+                    const { ctx } = chart;
+                    ctx.save();
+                    ctx.font = '600 14px Inter, sans-serif';
+                    ctx.fillStyle = '#e6faff';
+                    chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                        const val = values[i];
+                        const text = metricKey === 'ir' ? `${val.toFixed(2)}` : `${val.toFixed(2)}%`;
+                        const x = bar.x;
+                        const y = bar.y - 6 * ((metricKey === 'ir' || val >= 0) ? 1 : -1);
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = (metricKey === 'ir' || val >= 0) ? 'bottom' : 'top';
+                        ctx.fillText(text, x, y);
+                    });
+                    ctx.restore();
+                }
             };
-            const baseColors = pts.map(p => p.c === 'positive-high' ? '#dc2626' : p.c === 'positive-mid' ? '#f97316' : p.c === 'negative-high' ? '#166534' : p.c === 'negative-mid' ? '#16a34a' : '#6b7280');
-            const bgColors = baseColors.map(c => rgba(c, 0.45));
-            const borderColors = baseColors.map(_ => 'rgba(255,255,255,0.7)');
 
-            const xVals = pts.map(p => p.x).filter(isFinite);
-            const yVals = pts.map(p => p.y).filter(isFinite);
-            const yMin = Math.min(...yVals);
-            const yMax = Math.max(...yVals);
-            const yPad = Math.max(0.5, (yMax - yMin) * 0.08);
-
-            const useLogX = factorKey === 'volume';
-
-            if (window.factorChart) { window.factorChart.destroy(); }
-            window.factorChart = new Chart(ctx, {
-                type: 'scatter',
+            if (window.quantBarChart) { window.quantBarChart.destroy(); }
+            window.quantBarChart = new Chart(ctx, {
+                type: 'bar',
                 data: {
+                    labels,
                     datasets: [{
-                        label: `${factorKey} vs. Return`,
-                        data: pts.map(p => ({ x: p.x, y: p.y })),
-                        pointBackgroundColor: bgColors,
-                        pointBorderColor: borderColors,
-                        pointBorderWidth: 1,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        pointHitRadius: 8,
+                        label: metricKey === 'ir' ? 'IR' : '平均報酬 (%)',
+                        data: values,
+                        backgroundColor: colors,
+                        borderColor: borderColors,
+                        borderWidth: 1.2,
+                        borderRadius: 10,
+                        barThickness: 'flex',
+                        maxBarThickness: 32,
+                        hoverBackgroundColor: colors,
                     }]
                 },
                 options: {
-                    parsing: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => { const p = pts[ctx.dataIndex]; const xv = useLogX ? p.x.toLocaleString() : p.x.toLocaleString(); return `${p.s}  ${factorKey}: ${xv}  Return: ${p.y.toFixed(2)}%`; } } }
+                        tooltip: {
+                            titleFont: { size: 13, weight: '600' },
+                            bodyFont: { size: 13 },
+                            callbacks: {
+                                label: (ctx) => {
+                                    const g = groups[ctx.dataIndex];
+                                    const main = metricKey === 'ir' ? `IR: ${ctx.parsed.y.toFixed(2)}` : `平均報酬: ${ctx.parsed.y.toFixed(2)}%`;
+                                    return [main, `IR: ${g.ir.toFixed(2)}`, `樣本: ${g.count}`];
+                                }
+                            }
+                        }
                     },
+                    animation: { duration: 800, easing: 'easeOutQuart' },
                     scales: {
                         x: {
-                            type: useLogX ? 'logarithmic' : 'linear',
-                            title: { 
-                                display: true, 
-                                text: useLogX ? '成交量 (對數)' : (factorKey==='return' ? '報酬 (%)' : factorKey),
-                                font: { size: 14, weight: 'bold' },
-                                color: '#ffffff'
-                            },
-                            ticks: {
-                                color: '#ffffff',
-                                font: { size: 12, weight: '500' },
-                                callback: (v) => {
-                                    const val = useLogX ? Number(v) : Number(v);
-                                    return typeof formatCompact === 'function' ? formatCompact(val) : val;
-                                }
-                            },
+                            ticks: { color: '#ffffff', font: { size: 14 } },
                             grid: { color: 'rgba(255,255,255,0.12)' }
                         },
                         y: {
-                            title: { 
-                                display: true, 
-                                text: 'Return (%)',
-                                font: { size: 14, weight: 'bold' },
-                                color: '#ffffff'
-                            },
-                            ticks: { 
-                                color: '#ffffff',
-                                font: { size: 12, weight: '500' }
-                            },
+                            title: { display: true, text: metricKey === 'ir' ? 'IR' : 'Return (%)', color: '#ffffff' },
+                            ticks: { color: '#ffffff', font: { size: 14 } },
                             grid: { color: 'rgba(255,255,255,0.12)' },
-                            suggestedMin: Math.floor((yMin - yPad) * 10) / 10,
-                            suggestedMax: Math.ceil((yMax + yPad) * 10) / 10
+                            suggestedMax: ymax,
+                            suggestedMin: yMin
                         }
                     },
                     onClick: (evt, elements) => {
                         if (!elements?.length) return;
                         const idx = elements[0].index;
-                        highlightHeatmapSymbol(pts[idx].s);
+                        showQuantTopList(groups, idx, factorKey);
                     }
-                }
+                },
+                plugins: [labelPlugin]
             });
         }
 
-        function renderQuintileTable(data, factorKey) {
-            const tbody = document.querySelector('#quintileTable tbody');
-            if (!tbody) return;
-            const getVal = (d) => factorKey==='return' ? Number(d.return) : Number(d[factorKey]);
-            const rows = (data || []).filter(d => isFinite(d.return) && isFinite(getVal(d)));
-            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">無資料</td></tr>'; return; }
-            const sorted = rows.sort((a,b) => getVal(a) - getVal(b));
-            const n = sorted.length;
-            const qsize = Math.max(1, Math.floor(n / 5));
-            const groups = [];
-            for (let i = 0; i < 5; i++) {
-                const start = i * qsize;
-                const end = i === 4 ? n : (i+1) * qsize;
-                const g = sorted.slice(start, end);
-                const avg = g.reduce((s,d) => s + Number(d.return), 0) / Math.max(1, g.length);
-                groups.push({ label: `Q${i+1}`, count: g.length, avg });
+        // 點擊 bar 顯示該組 Top N 清單
+        function showQuantTopList(groups, index, factorKey) {
+            const container = document.getElementById('quantTopList');
+            if (!container) return;
+            const group = groups[index];
+            if (!group || !group.items || !group.items.length) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                return;
             }
-            tbody.innerHTML = groups.map(g => `
-                <tr>
-                    <td style="text-align:left;">${g.label}</td>
-                    <td>${g.count}</td>
-                    <td class="${g.avg>=0?'positive':'negative'}">${g.avg.toFixed(2)}%</td>
-                </tr>
+            const topN = [...group.items]
+                .sort((a,b) => Number(b.return) - Number(a.return))
+                .slice(0, 10);
+            container.style.display = 'block';
+            container.innerHTML = topN.map(it => `
+                <div class="anomaly-item" data-sym="${it.symbol}" onclick="highlightHeatmapSymbol('${it.symbol}')">
+                    <div class="anomaly-left">
+                        <span class="badge ${it.return>=0?'up':'down'}">Top</span>
+                        <strong>${it.symbol}</strong>
+                    </div>
+                    <div class="anomaly-right">${Number(it.return).toFixed(2)}% · 因子 ${factorKey==='return'?Number(it.return).toFixed(2)+'%':Number(it[factorKey]).toLocaleString()}</div>
+                </div>
             `).join('');
         }
 
