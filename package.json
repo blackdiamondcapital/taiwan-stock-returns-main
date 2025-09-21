@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "init-db": "node scripts/initDatabase.js",
     "oneclick": "node scripts/oneclick.js",
-    "oneclick:seed": "ONECLICK_SEED=true node scripts/oneclick.js"
+    "oneclick:seed": "ONECLICK_SEED=true node scripts/oneclick.js",
+    "seed:exchanges": "node scripts/seed_from_exchanges.js"
   },
   "dependencies": {
     "express": "^4.18.2",

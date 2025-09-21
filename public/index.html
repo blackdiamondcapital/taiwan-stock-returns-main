@@ -8,6 +8,8 @@
     <link rel="icon" href="data:,">
     <!-- 引入 Chart.js 圖表庫 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Zoom/Pan 插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         /* 繼承原有的科技感配色系統 */
         :root {
@@ -45,6 +47,7 @@
             --gradient-success: linear-gradient(135deg, #00ff88, #00d4ff);
             --gradient-danger: linear-gradient(135deg, #ff4757, #ff0080);
         }
+
 
         /* 深度分析新增元件 */
         .factor-controls {
@@ -98,7 +101,7 @@
         .risk-metric { display: flex; align-items: center; gap: 1rem; }
         .metric-label { min-width: 80px; font-size: 0.9rem; color: var(--text-secondary); }
         .risk-bar { flex: 1; height: 20px; background: var(--bg-tertiary); border-radius: 10px; overflow: hidden; position: relative; }
-        .risk-fill { height: 100%; background: linear-gradient(90deg, var(--success), var(--warning), var(--error)); transition: width 0.5s ease; }
+        .risk-fill { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #fff; transition: width 0.5s ease; }
         .metric-value { min-width: 60px; text-align: right; font-weight: 600; color: var(--text-primary); }
         
         .action-plan { min-height: 150px; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 1rem; background: rgba(0,0,0,0.2); }
@@ -183,7 +186,7 @@
             margin-left: 8px;
         }
         .date-picker input[type="date"] {
-            background: rgba(26,31,46,0.6);
+            background: rgba(26, 31, 46, 0.6);
             border: 1px solid var(--border-secondary);
             color: var(--text-primary);
             padding: 6px 10px;
@@ -523,7 +526,7 @@
             padding: 0.5rem 0.75rem;
             color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             font-size: 0.9rem;
         }
 
@@ -1096,6 +1099,477 @@
         
         /* 永久隱藏：趨勢圖占位區塊 */
         .chart-container { display: none !important; }
+
+        /* 比較工具與警示設定樣式 */
+        .comparison-section, .alerts-section {
+            margin-top: 1.5rem;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .comparison-grid, .alerts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .comparison-card, .alerts-card {
+            background: var(--gradient-card);
+            border: 1px solid var(--border-secondary);
+            border-radius: 20px;
+            padding: 1.75rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-card:hover, .alerts-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 212, 255, 0.15);
+            border-color: rgba(0, 212, 255, 0.4);
+        }
+
+        .comparison-card::before, .alerts-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .comparison-card:hover::before, .alerts-card:hover::before {
+            left: 100%;
+        }
+
+        /* 比較工具專用樣式 */
+        .comparison-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .comparison-controls .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .comparison-controls label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            min-height: 40px;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-secondary);
+            border-radius: 25px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            cursor: default;
+            backdrop-filter: blur(10px);
+        }
+
+        .chip:hover {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(255, 0, 128, 0.1));
+            border-color: rgba(0, 212, 255, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+        }
+
+        .chip .remove {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 0.125rem;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .chip .remove:hover {
+            color: var(--error);
+            background: rgba(255, 71, 87, 0.2);
+        }
+
+        .comparison-chart {
+            min-height: 380px;
+            margin: 1rem 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .comparison-table th, .comparison-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-secondary);
+            text-align: right;
+            transition: background 0.2s ease;
+        }
+
+        .comparison-table th {
+            text-align: left;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.04);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .comparison-table tbody tr:hover {
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .comparison-table .stock-symbol {
+            color: var(--primary-cyan);
+            font-weight: 700;
+        }
+
+        /* 指標散點圖：科技感霓虹外框 */
+        .neon-frame {
+            position: relative;
+            padding: 12px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(255,0,128,0.04));
+            border: 1px solid rgba(0, 212, 255, 0.35);
+            box-shadow:
+                0 8px 24px rgba(0, 212, 255, 0.15),
+                inset 0 0 16px rgba(0, 212, 255, 0.12);
+            transition: all .3s ease;
+        }
+        .neon-frame::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 14px;
+            padding: 1px; /* 內嵌發光邊 */
+            background: linear-gradient(90deg,
+                rgba(0, 212, 255, 0.6),
+                rgba(255, 0, 128, 0.5),
+                rgba(0, 212, 255, 0.6)
+            );
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            opacity: 0.85;
+            filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.35));
+        }
+        .neon-frame:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 10px 28px rgba(0, 212, 255, 0.22),
+                inset 0 0 20px rgba(0, 212, 255, 0.18);
+        }
+
+        /* 比較工具版面：第一列（設定、表格），第二列（散點圖） */
+        #comparisonSection .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        #comparisonSettingsCard { grid-column: 1; grid-row: 1; }
+        #comparisonTableCard { grid-column: 2; grid-row: 1; }
+        #comparisonScatterCard { grid-column: 1 / span 2; grid-row: 2; }
+
+        /* 響應式：窄螢幕下改為單欄堆疊 */
+        @media (max-width: 1024px) {
+            #comparisonSection .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+            #comparisonSettingsCard { grid-column: 1; grid-row: 1; }
+            #comparisonTableCard { grid-column: 1; grid-row: 2; }
+            #comparisonScatterCard { grid-column: 1; grid-row: 3; }
+        }
+
+        /* 警示設定專用樣式 */
+        .alerts-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .alerts-form .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .alerts-form label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .alerts-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .alerts-table th, .alerts-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-secondary);
+            text-align: left;
+        }
+
+        .alerts-table th {
+            background: rgba(255, 255, 255, 0.04);
+            font-weight: 600;
+            color: var(--text-secondary);
+            position: sticky;
+            top: 0;
+        }
+
+        .alerts-table tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        .alerts-table tbody tr:hover {
+            background: rgba(255, 0, 128, 0.08);
+            transform: scale(1.01);
+        }
+
+        .alerts-table .rule-condition {
+            font-family: 'Monaco', 'Consolas', monospace;
+            color: var(--primary-cyan);
+            font-weight: 600;
+        }
+
+        .inbox {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 320px;
+            overflow: auto;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+        }
+
+        .inbox-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-secondary);
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .inbox-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gradient-primary);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .inbox-item:hover::before {
+            opacity: 1;
+        }
+
+        .inbox-item:hover {
+            border-color: rgba(0, 212, 255, 0.5);
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(255, 0, 128, 0.05));
+            transform: translateX(4px);
+        }
+
+        .inbox-item .time {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .inbox-item .alert-symbol {
+            color: var(--primary-cyan);
+            font-weight: 700;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+
+        .inbox-item .alert-message {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            flex: 1;
+        }
+
+        /* 狀態指示器 */
+        .status-indicator {
+            position: relative;
+        }
+
+        .status-indicator.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -20px;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--primary-cyan);
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            transform: translateY(-50%);
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .comparison-grid, .alerts-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .comparison-controls, .alerts-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .comparison-controls .control-group {
+                justify-content: space-between;
+            }
+
+            .comparison-chart {
+                min-height: 300px;
+            }
+        }
+
+        /* 工具提示 */
+        .tooltip {
+            position: absolute;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            border: 1px solid var(--border-secondary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+        }
+
+        /* 空狀態 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* 按鈕增強 */
+        .btn-primary {
+            background: var(--gradient-button);
+            border: none;
+            color: var(--bg-primary);
+            font-weight: 600;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-icon {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 0.5rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-icon:hover {
+            background: rgba(0, 212, 255, 0.15);
+            border-color: rgba(0, 212, 255, 0.4);
+            color: var(--primary-cyan);
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -1531,7 +2005,7 @@
                         <div id="quantTopList" class="anomaly-list" style="margin-top:10px;display:none"></div>
                     </div>
                     
-                    <div class="analysis-card" style="margin-top:16px;">
+                    <div class="analysis-card">
                         <h3><i class="fas fa-exclamation-triangle"></i> 市場異常</h3>
                         <div class="anomaly-list" id="anomaliesList">
                             <div class="muted">載入中...</div>
@@ -1667,6 +2141,208 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 比較工具 -->
+            <section class="comparison-section" id="comparisonSection" style="display:none">
+                <div class="comparison-grid">
+                    <div class="comparison-card" id="comparisonSettingsCard">
+                        <h3><i class="fas fa-balance-scale"></i> 比較設定</h3>
+                        <div class="comparison-controls">
+                            <div class="control-group">
+                                <input id="comparisonInput" class="filter-input" placeholder="輸入代碼，例如 2330 或 2330.TW" />
+                                <button class="btn-primary" id="comparisonAddBtn" title="加入股票代碼">
+                                    <i class="fas fa-plus"></i> 加入
+                                </button>
+                            </div>
+                            <div class="control-group">
+                                <select id="comparisonSelect" class="filter-input">
+                                    <option value="">從列表加入…</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label for="comparisonMetric">度量</label>
+                                <select id="comparisonMetric" class="filter-input">
+                                    <option value="return">報酬率</option>
+                                    <option value="volume">成交量</option>
+                                    <option value="volatility">波動</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label for="comparisonNormalize">基準化</label>
+                                <input id="comparisonNormalize" type="checkbox" title="將數據基準化至起始點" />
+                            </div>
+                            <button class="btn-icon" id="comparisonClearBtn" title="清除所有選擇的股票">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                        </div>
+                        <div class="chip-list" id="comparisonList">
+                            <div class="empty-state" id="comparisonEmpty" style="display:none;">
+                                <i class="fas fa-chart-line"></i>
+                                <div>尚未選擇股票</div>
+                                <small>請從上方控制項加入股票代碼</small>
+                                <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.8;">
+                                    💡 提示：股票代碼格式<br>
+                                    • 上市：2330.TW<br>
+                                    • 上櫃：2330.TWO<br>
+                                    • 或直接輸入 2330
+                                </div>
+                            </div>
+                        </div>
+                        <div class="status-indicator" id="comparisonStatus" style="display:none;">
+                            <span id="comparisonStatusText">載入中...</span>
+                        </div>
+                    </div>
+                    <!-- 指標散點圖卡片：報酬率 vs 成交量/波動 -->
+                    <div class="comparison-card" id="comparisonScatterCard">
+                        <h3><i class="fas fa-braille"></i> 指標散點圖</h3>
+                        <div class="comparison-controls" style="margin-bottom:0.75rem;">
+                            <div class="control-group">
+                                <label for="comparisonScatterY">Y 軸</label>
+                                <select id="comparisonScatterY" class="filter-input">
+                                    <option value="volume">成交量</option>
+                                    <option value="volatility">波動</option>
+                                    <option value="price">股價</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="neon-frame" style="min-height:340px;">
+                            <canvas id="comparisonScatter" height="320"></canvas>
+                        </div>
+                    </div>
+                    <div class="comparison-card" id="comparisonTableCard">
+                        <h3><i class="fas fa-table"></i> 數據比較</h3>
+                        <div class="comparison-table-wrapper" style="overflow-x:auto;">
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>股票</th>
+                                        <th>名稱</th>
+                                        <th>報酬率</th>
+                                        <th>股價</th>
+                                        <th>成交量</th>
+                                        <th>波動</th>
+                                        <th>市場</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comparisonTableBody">
+                                    <tr id="tableEmpty" style="display:none;">
+                                        <td colspan="7" class="empty-state">
+                                            <i class="fas fa-table"></i>
+                                            <div>選擇股票查看數據表</div>
+                                            <small>請先加入至少一個股票代碼</small>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:center;">
+                            <small class="muted">最多比較 5 檔股票</small>
+                            <button class="btn-icon" id="exportComparisonBtn" title="匯出比較數據">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 警示設定 -->
+            <section class="alerts-section" id="alertsSection" style="display:none">
+                <div class="alerts-grid">
+                    <div class="alerts-card">
+                        <h3><i class="fas fa-bell-plus"></i> 新增警示規則</h3>
+                        <div class="alerts-form">
+                            <div class="form-group">
+                                <label for="alertSymbolInput">股票代碼</label>
+                                <input id="alertSymbolInput" class="filter-input" placeholder="代碼或留空=全部" />
+                                <small class="form-hint">留空代表監控所有股票</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="alertTypeSelect">指標類型</label>
+                                <select id="alertTypeSelect" class="filter-input">
+                                    <option value="return">報酬率 (%)</option>
+                                    <option value="volume">成交量</option>
+                                    <option value="volatility">波動</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="alertOperatorSelect">條件</label>
+                                <select id="alertOperatorSelect" class="filter-input">
+                                    <option value=">=">大於等於 ≥</option>
+                                    <option value="<=">小於等於 ≤</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="alertThresholdInput">閾值</label>
+                                <input id="alertThresholdInput" class="filter-input" type="number" step="0.1" placeholder="0.0" />
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <button class="btn-primary" id="addAlertBtn" style="width:100%; margin-top:1.5rem;">
+                                    <i class="fas fa-plus"></i> 新增規則
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="desktopNotifyToggle" style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                                <input type="checkbox" id="desktopNotifyToggle" />
+                                <span>啟用桌面通知</span>
+                                <small class="form-hint" style="margin-left:auto;">接收瀏覽器通知</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="alerts-card">
+                        <h3><i class="fas fa-list-check"></i> 警示規則</h3>
+                        <div class="table-wrapper" style="overflow-x:auto;">
+                            <table class="alerts-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:70%">條件</th>
+                                        <th style="width:30%">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alertRulesBody">
+                                    <tr id="rulesEmpty" style="display:none;">
+                                        <td colspan="2" class="empty-state">
+                                            <i class="fas fa-bell-slash"></i>
+                                            <div>尚未設定任何規則</div>
+                                            <small>請在左側新增警示規則</small>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:1rem; text-align:center;">
+                            <small class="muted">規則會在數據更新時自動評估</small>
+                        </div>
+                    </div>
+                    <div class="alerts-card">
+                        <h3 style="display:flex;justify-content:space-between;align-items:center;">
+                            <span><i class="fas fa-inbox"></i> 警示收件匣</span>
+                            <div style="display:flex; gap:0.5rem;">
+                                <button class="btn-icon" id="refreshInboxBtn" title="重新整理">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <button class="btn-icon" id="clearInboxBtn" title="清空收件匣">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </h3>
+                        <div class="inbox" id="alertsInbox">
+                            <div class="empty-state" id="inboxEmpty" style="display:none;">
+                                <i class="fas fa-inbox"></i>
+                                <div>收件匣為空</div>
+                                <small>觸發的警示將會顯示在此處</small>
+                            </div>
+                        </div>
+                        <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:center;">
+                            <small class="muted">保留最近 100 筆記錄</small>
+                            <button class="btn-icon" id="exportAlertsBtn" title="匯出警示記錄">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -1675,12 +2351,58 @@
         let currentSort = { column: 'return', direction: 'desc' };
         let chartInstance = null;
         let currentData = [];
+        let comparisonSelected = [];
+        let comparisonChart = null;
+        let comparisonScatterChart = null;
+        // 比較圖快取：{ key: `${symbol}|${period}|${asOf}`, value: { lastFetched: number, series: Array } }
+        const comparisonCache = new Map();
+        let alertRules = [];
+        let alertInbox = [];
+        let desktopNotifyEnabled = false;
+
+        // 取得最新股價（提供給散點圖 y=price 使用）
+        async function fetchLatestPrice(symbol) {
+            try {
+                const url = new URL(`${API_BASE_URL}/stocks/${encodeURIComponent(symbol)}/prices`);
+                url.searchParams.set('limit', '1');
+                const resp = await fetch(url.toString());
+                if (!resp.ok) return null;
+                const json = await resp.json();
+                const rows = Array.isArray(json.data) ? json.data : [];
+                if (!rows.length) return null;
+                const r = rows[0];
+                const v = (r.price != null ? Number(r.price) : (r.close != null ? Number(r.close) : null));
+                return isFinite(v) ? v : null;
+            } catch (_) { return null; }
+        }
+
+        // 重新排列比較區塊卡片：將「指標散點圖」移到「比較設定」與「數據比較」下方
+        function repositionScatterCard() {
+            try {
+                const grid = document.querySelector('.comparison-grid');
+                if (!grid) return;
+                const scatterCanvas = document.getElementById('comparisonScatter');
+                if (!scatterCanvas) return;
+                const scatterCard = scatterCanvas.closest('.comparison-card');
+                if (!scatterCard) return;
+                const tableIcon = grid.querySelector('h3 i.fa-table');
+                const tableCard = tableIcon ? tableIcon.closest('.comparison-card') : null;
+                if (!tableCard) return;
+                // 若散點卡已經在表格卡片之後，則不動
+                const cards = Array.from(grid.querySelectorAll('.comparison-card'));
+                const idxScatter = cards.indexOf(scatterCard);
+                const idxTable = cards.indexOf(tableCard);
+                if (idxScatter > idxTable) return;
+                // 插到表格卡片之後
+                tableCard.insertAdjacentElement('afterend', scatterCard);
+            } catch (_) { /* 忽略 */ }
+        }
 
         // 工具函式（百分位與數字簡寫）
         function percentile(arr, p) {
             if (!Array.isArray(arr) || arr.length === 0) return 0;
             const a = [...arr].sort((x, y) => x - y);
-            const idx = Math.min(a.length - 1, Math.max(0, Math.floor(a.length * p)));
+            const idx = Math.min(a.length - 1, Math.floor(a.length * p));
             return a[idx];
         }
 
@@ -1694,6 +2416,8 @@
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             initializeEventListeners();
+            initComparisonUI();
+            initAlertsUI();
             // 初始化日期為今天（若需要可留空代表取最新）
             const dp = document.getElementById('datePicker');
             if (dp) {
@@ -1707,6 +2431,9 @@
                     loadRankingData();
                 });
             }
+            // 套用當前選中的視圖
+            const currentView = document.querySelector('.nav-item.active')?.dataset.view || 'overview';
+            switchView(currentView);
             loadRankingData();
             initStatCardInteractions();
         });
@@ -1731,8 +2458,8 @@
                 });
             });
 
-            // 篩選器變更
-            document.querySelectorAll('.filter-input').forEach(input => {
+            // 篩選器變更（僅限全域篩選面板中的輸入項）
+            document.querySelectorAll('.filter-panel .filter-input').forEach(input => {
                 input.addEventListener('change', applyFilters);
             });
             
@@ -1825,6 +2552,68 @@
             [qFactor, qBucket, qMetric].forEach(el => {
                 if (el) el.addEventListener('change', () => renderAnalysisPanels());
             });
+
+            // 比較工具事件
+            const sel = document.getElementById('comparisonSelect');
+            if (sel) sel.addEventListener('change', () => {
+                if (sel.value) { addComparisonSymbol(sel.value); sel.value = ''; }
+            });
+            const addBtn = document.getElementById('comparisonAddBtn');
+            if (addBtn) addBtn.addEventListener('click', () => {
+                const v = (document.getElementById('comparisonInput')?.value || '').trim();
+                if (v) addComparisonSymbol(v);
+            });
+            const clearBtn = document.getElementById('comparisonClearBtn');
+            if (clearBtn) clearBtn.addEventListener('click', () => {
+                comparisonSelected = [];
+                persistComparison();
+                renderComparisonList();
+                updateComparisonChart();
+                updateComparisonTable();
+            });
+            const metricSel = document.getElementById('comparisonMetric');
+            if (metricSel) metricSel.addEventListener('change', () => {
+                updateComparisonChart();
+                updateComparisonTable();
+            });
+            const normEl = document.getElementById('comparisonNormalize');
+            if (normEl) normEl.addEventListener('change', () => updateComparisonChart());
+
+            // 警示設定事件
+            const addRuleBtn = document.getElementById('addAlertBtn');
+            if (addRuleBtn) addRuleBtn.addEventListener('click', addAlertRule);
+            const inboxClearBtn = document.getElementById('clearInboxBtn');
+            if (inboxClearBtn) inboxClearBtn.addEventListener('click', () => { alertInbox = []; saveAlertInbox(); renderAlertsInbox(); });
+            const deskToggle = document.getElementById('desktopNotifyToggle');
+            if (deskToggle) deskToggle.addEventListener('change', onDesktopToggleChange);
+
+            // 新增的按鈕事件
+            const chartRefreshBtn = document.getElementById('chartRefreshBtn');
+            if (chartRefreshBtn) chartRefreshBtn.addEventListener('click', () => {
+                updateComparisonChart();
+                showToast('圖表已更新', 'success');
+            });
+
+            const chartFullscreenBtn = document.getElementById('chartFullscreenBtn');
+            if (chartFullscreenBtn) chartFullscreenBtn.addEventListener('click', () => toggleComparisonChartFullscreen());
+
+            const cmpCanvas = document.getElementById('comparisonChartCanvas');
+            if (cmpCanvas) cmpCanvas.addEventListener('dblclick', () => {
+                if (comparisonChart && comparisonChart.resetZoom) comparisonChart.resetZoom();
+            });
+
+            const refreshInboxBtn = document.getElementById('refreshInboxBtn');
+            if (refreshInboxBtn) refreshInboxBtn.addEventListener('click', () => {
+                loadAlertInbox();
+                renderAlertsInbox();
+                showToast('收件匣已更新', 'success');
+            });
+
+            const exportComparisonBtn = document.getElementById('exportComparisonBtn');
+            if (exportComparisonBtn) exportComparisonBtn.addEventListener('click', exportComparisonData);
+
+            const exportAlertsBtn = document.getElementById('exportAlertsBtn');
+            if (exportAlertsBtn) exportAlertsBtn.addEventListener('click', exportAlertsData);
         }
         
         // 更新排序指示器
@@ -1848,6 +2637,20 @@
             if (el) el.style.display = display;
         }
 
+        // 切換比較圖全螢幕
+        function toggleComparisonChartFullscreen() {
+            const container = document.getElementById('comparisonSection');
+            // 優先對 chart 卡片做全螢幕
+            const card = document.querySelector('#comparisonSection .comparison-card:nth-child(2)');
+            const target = card || container;
+            if (!target) return;
+            if (!document.fullscreenElement) {
+                target.requestFullscreen?.();
+            } else {
+                document.exitFullscreen?.();
+            }
+        }
+
         async function switchView(view) {
             const isOverview = view === 'overview';
             const isRanking = view === 'ranking';
@@ -1858,6 +2661,8 @@
             setVisibility('.filter-panel', (isOverview || isRanking) ? 'block' : 'none');
             setVisibility('.heatmap-container', isOverview ? 'block' : 'none');
             setVisibility('.ranking-table-container', isRanking ? 'block' : 'none');
+            setVisibility('.comparison-section', view === 'comparison' ? 'block' : 'none');
+            setVisibility('.alerts-section', view === 'alerts' ? 'block' : 'none');
 
             // 在總覽僅保留「市場類別」篩選，其它隱藏；在其他頁面全部顯示
             const industryGroup = document.getElementById('industryGroup');
@@ -1892,6 +2697,31 @@
                     try { await loadRankingData(); } catch (_) {}
                 }
                 renderAnalysisPanels();
+            }
+            if (view === 'comparison') {
+        // 確保有排行榜資料供比較表與下拉清單使用
+        if (!currentData || currentData.length === 0) {
+            try { await loadRankingData(); } catch (_) {}
+        }
+        initComparisonUI();
+        const metricSel = document.getElementById('comparisonMetric');
+        if (metricSel) metricSel.addEventListener('change', () => {
+            updateComparisonChart();
+            updateComparisonTable();
+        });
+        const normEl = document.getElementById('comparisonNormalize');
+        if (normEl) normEl.addEventListener('change', () => updateComparisonChart());
+        // 散點圖 Y 軸選擇
+        const scatterSel = document.getElementById('comparisonScatterY');
+        if (scatterSel) scatterSel.addEventListener('change', () => { try { updateComparisonScatter(); } catch (_) {} });
+        // 進入比較頁時立即渲染散點圖
+        try { await updateComparisonScatter(); } catch (_) {}
+        // 調整卡片順序：將指標散點圖移至比較設定與數據比較之後
+        try { repositionScatterCard(); } catch (_) {}
+    }
+            if (view === 'alerts') {
+                renderAlertRules();
+                renderAlertsInbox();
             }
         }
 
@@ -1960,23 +2790,23 @@
         }
         function formatDeltaPct(v){
             const s = Math.abs(v).toFixed(2) + '%';
-            return (v>0?'+':'−') + s.replace('-', '');
+            return (v>0?'+':'') + s.replace('-', '');
         }
         function formatDeltaPct0(v){
             const s = Math.abs(v).toFixed(0) + '%';
-            return (v>0?'+':'−') + s.replace('-', '');
+            return (v>0?'+':'') + s.replace('-', '');
         }
         function formatDeltaPct1(v){
             const s = Math.abs(v).toFixed(1) + '%';
-            return (v>0?'+':'−') + s.replace('-', '');
+            return (v>0?'+':'') + s.replace('-', '');
         }
         function formatDeltaTimes(v){
             const s = Math.abs(v).toFixed(1) + 'x';
-            return (v>0?'+':'−') + s.replace('-', '');
+            return (v>0?'+':'') + s.replace('-', '');
         }
         function formatDeltaRatio(v){
             const s = Math.abs(v).toFixed(2);
-            return (v>0?'+':'−') + s.replace('-', '');
+            return (v>0?'+':'') + s.replace('-', '');
         }
 
         async function loadRankingData() {
@@ -2002,6 +2832,8 @@
                 // 日期或資料變更後刷新熱力圖
                 refreshHeatmap();
                 updateAsOfBadge();
+                populateComparisonSelect();
+                if (typeof evaluateAlerts === 'function') evaluateAlerts();
             } catch (error) {
                 console.error('載入數據失敗:', error);
                 // 失敗時清空資料並維持介面可用
@@ -2014,6 +2846,96 @@
         
         // API 基礎 URL：跟隨目前網頁來源，自動指向同源後端（避免硬編 port 造成連線被拒）
         const API_BASE_URL = `${window.location.origin}/api`;
+        
+        // 取得最新收盤價（從價格 API）
+        async function fetchLatestPrice(symbol) {
+            try {
+                const url = new URL(`${API_BASE_URL}/stocks/${encodeURIComponent(symbol)}/prices`);
+                url.searchParams.set('limit', '1');
+                const resp = await fetch(url.toString());
+                if (!resp.ok) return null;
+                const json = await resp.json();
+                const rows = Array.isArray(json.data) ? json.data : [];
+                if (!rows.length) return null;
+                const r = rows[0];
+                const price = r.closePrice ?? r.close_price ?? r.close ?? r.price ?? null;
+                return price != null ? Number(price) : null;
+            } catch (_) { return null; }
+        }
+        
+        // 股票基本資訊快取（避免重複查詢）
+        const stockMetaCache = new Map();
+
+        // 從資料庫抓取股票基本資訊（symbol/name/market 等）
+        async function fetchStockMeta(input) {
+            const raw = String(input || '').trim().toUpperCase();
+            if (!raw) return null;
+            // 快取優先
+            if (stockMetaCache.has(raw)) return stockMetaCache.get(raw);
+            try {
+                const resp = await fetch(`${API_BASE_URL}/stocks/${encodeURIComponent(raw)}`);
+                const json = await resp.json();
+                if (json && json.success && json.data && json.data.symbol) {
+                    const meta = json.data;
+                    const key = String(meta.symbol).toUpperCase();
+                    stockMetaCache.set(key, meta);
+                    if (key !== raw) stockMetaCache.set(raw, meta);
+                    return meta;
+                }
+            } catch (e) {
+                console.warn('fetchStockMeta failed:', raw, e);
+            }
+            return null;
+        }
+
+        // ===== 前端備援：以價格資料推導序列 =====
+        async function fetchSeriesFromPrices(symbol, metric) {
+            try {
+                const url = new URL(`${API_BASE_URL}/stocks/${encodeURIComponent(symbol)}/prices`);
+                url.searchParams.set('limit', '240');
+                const resp = await fetch(url.toString());
+                if (!resp.ok) throw new Error('價格資料取得失敗');
+                const json = await resp.json();
+                const rows = Array.isArray(json.data) ? json.data : [];
+                rows.sort((a,b)=> new Date(a.date) - new Date(b.date));
+                const pickClose = (r)=> r.closePrice ?? r.close_price ?? r.close ?? r.price ?? null;
+                const pickVolume = (r)=> r.volume ?? null;
+                const dates = rows.map(r => r.date).filter(Boolean);
+                const closes = rows.map(pickClose).map(v => (v==null?null:Number(v)));
+                const volumes = rows.map(pickVolume).map(v => (v==null?null:parseFloat(v)));
+                const returns = closes.map((v,i,arr)=> (i>0 && arr[i-1]>0 && v!=null && arr[i-1]!=null) ? ((v - arr[i-1]) / arr[i-1]) * 100 : null);
+                let values;
+                if (metric === 'volume') values = volumes;
+                else if (metric === 'volatility') values = returns; // 後續再 rollingStd
+                else values = returns; // return
+                const data = dates.map((d,i)=> ({ date: d, value: values[i] }));
+                return { symbol, data };
+            } catch (e) {
+                console.warn('prices fallback 失敗:', symbol, e);
+                return { symbol, data: [] };
+            }
+        }
+
+        async function fetchSeriesWithFallback(symbol, metric, period, asOf) {
+            const base = String(symbol||'').toUpperCase();
+            const variants = /^\d{4}$/.test(base) ? [ `${base}.TW`, `${base}.TWO` ] : [ base ];
+            const m = (metric === 'volatility') ? 'return' : metric;
+            // 先試 history，再試 prices
+            for (const sym of variants) {
+                try {
+                    const s = await fetchHistorySeries(sym, m, period, asOf);
+                    const ok = (s && Array.isArray(s.data) && s.data.some(p => p && p.value != null && isFinite(p.value)));
+                    if (ok) return s;
+                } catch (_) {}
+            }
+            for (const sym of variants) {
+                const fb = await fetchSeriesFromPrices(sym, m);
+                const ok = (fb && Array.isArray(fb.data) && fb.data.some(p => p && p.value != null && isFinite(p.value)));
+                if (ok) return fb;
+            }
+            // 都沒有，就回空殼
+            return { symbol: variants[0], data: [] };
+        }
 
         // 從 API 載入排行榜數據
         async function loadRankingFromAPI() {
@@ -2047,7 +2969,9 @@
                 currentData = data.map((item, index) => ({
                     rank: (index + 1),
                     symbol: item.symbol,
+                    // backend already returns name as short_name; keep both for UI
                     name: item.name || item.symbol,
+                    short_name: item.short_name || item.name || '',
                     return: parseFloat(item.return_rate) || 0,
                     price: parseFloat(item.current_price) || 0,
                     change: parseFloat(item.price_change) || 0,
@@ -2248,7 +3172,7 @@
             
             tr.innerHTML = `
                 <td><span class="rank-badge ${rankClass}">${rank}</span></td>
-                <td><div class="stock-info"><span class="stock-symbol">${item.symbol}</span><span class="stock-name">${item.name}</span></div></td>
+                <td><div class="stock-info"><span class="stock-symbol">${item.symbol}</span><span class="stock-name">${item.short_name || item.name}</span></div></td>
                 <td><span class="return-value ${returnClass}"><i class="fas ${arrow}"></i> ${item.return.toFixed(2)}%</span></td>
                 <td>${item.price.toFixed(2)}</td>
                 <td class="${returnClass}">${item.change >= 0 ? '+' : ''}${item.change.toFixed(2)}</td>
@@ -2586,9 +3510,9 @@
         }
 
         // 亮顯指定代碼於熱力圖
-        function highlightHeatmapSymbol(symbolTW) {
-            const sym = symbolTW.replace('.TW','');
-            const cell = document.querySelector(`.heatmap-cell[data-symbol="${sym}"]`);
+        function highlightHeatmapSymbol(symbol) {
+            // symbol 如 "2330.TW"；熱力圖的 data-symbol 亦為完整代碼
+            const cell = document.querySelector(`.heatmap-cell[data-symbol="${symbol}"]`);
             if (!cell) return;
             cell.style.outline = '2px solid var(--primary-cyan)';
             cell.style.outlineOffset = '0px';
@@ -2622,19 +3546,7 @@
 
         
 
-        // 初始化時載入視圖與數據
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeEventListeners();
-            // 根據目前啟用的導覽按鈕，套用對應視圖（確保總覽只顯示市場篩選）
-            const currentView = document.querySelector('.nav-item.active')?.dataset.view || 'overview';
-            switchView(currentView);
-            loadRankingData();
-            
-            // 延遲載入熱力圖
-            setTimeout(() => {
-                refreshHeatmap();
-            }, 1000);
-        });
+        
 
         // ========= 統計卡片增強：資料與 sparkline =========
         function getWorkingData() {
@@ -2683,7 +3595,7 @@
                 const g = sorted.slice(start, start + size);
                 start += size;
                 const returns = g.map(x => Number(x.return)).filter(isFinite);
-                const mean = returns.reduce((s, v) => s + v, 0) / Math.max(1, returns.length);
+                const mean = returns.reduce((sum, r) => sum + r, 0) / Math.max(1, returns.length);
                 const variance = returns.length > 1 ? returns.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (returns.length - 1) : 0;
                 const stdev = Math.sqrt(variance);
                 const ir = stdev > 0 ? (mean / stdev) : 0;
@@ -3165,7 +4077,7 @@
             renderSparkline('sparkHigh', makeRandomSeries(10, 3), '#ff0080');
 
             // ====== 新增四張卡片計算（僅用價格/成交量） ======
-            // 1) 站上60日線比例（近似）：以正報酬作為簡化 proxy，若有 volatility 則提高門檻
+            // 1) 站上均線比例（近似）：以正報酬作為簡化 proxy，若有 volatility 則提高門檻
             const aboveMA60Approx = data.filter(d => d.return > 0.5).length; // 粗略 >0.5% 視為偏強
             const aboveMA20Approx = data.filter(d => d.return > 0.2).length;
             const dualAboveApprox = data.filter(d => d.return > 1).length; // 更強當作雙站上
@@ -3259,6 +4171,968 @@
                     <path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
                 </svg>
             `;
+        }
+
+        // ========= 比較工具功能 =========
+        function initComparisonUI() {
+    // 從 localStorage 載入已選清單
+    try { comparisonSelected = JSON.parse(localStorage.getItem('quantgems.comparisonSymbols') || '[]'); } catch (_) { comparisonSelected = []; }
+    populateComparisonSelect();
+    // 先將四碼代碼正規化為完整後綴（.TW/.TWO）
+    ensureComparisonSymbolsNormalized().then(() => {
+        renderComparisonList();
+        updateComparisonChart();
+        updateComparisonTable();
+    }).catch(() => {
+        renderComparisonList();
+        updateComparisonChart();
+        updateComparisonTable();
+    });
+}
+        function persistComparison() {
+    localStorage.setItem('quantgems.comparisonSymbols', JSON.stringify(comparisonSelected.slice(0,5)));
+}
+
+// 取得當前選擇的查詢日期（與全域函式一致，供比較工具使用）
+function getSelectedDate(){
+    const el = document.getElementById('datePicker');
+    return (el && el.value) ? el.value : '';
+}
+
+// 將 API 回傳資料依日期鍵對齊
+function alignTimeSeries(seriesList) {
+    // 蒐集所有日期鍵
+    const dateSet = new Set();
+    seriesList.forEach(s => (s.data || []).forEach(p => dateSet.add(p.date)));
+    const dates = Array.from(dateSet).sort();
+    // 對每個序列依照日期輸出值（不存在用 null 以利 Chart.js 斷線）
+    const aligned = seriesList.map(s => {
+        const map = new Map((s.data || []).map(p => [p.date, p.value]));
+        return {
+            symbol: s.symbol,
+            values: dates.map(d => (map.has(d) ? map.get(d) : null))
+        };
+    });
+    return { dates, aligned };
+}
+
+// 基準化：
+// - 百分比型(報酬/波動)：以首個非空值為 0 的偏移（v - v0）
+// - 量(成交量)：轉成相對變化百分比 ((v - v0)/|v0|*100)
+function normalizeSeries(values, type) {
+    const firstIdx = values.findIndex(v => v !== null && isFinite(v));
+    if (firstIdx === -1) return values.slice();
+    const v0 = values[firstIdx];
+    return values.map(v => {
+        if (v === null || !isFinite(v)) return null;
+        if (type === 'volume') {
+            const base = Math.abs(v0) < 1e-9 ? 1 : Math.abs(v0);
+            return ((v - v0) / base) * 100;
+        }
+        // return / volatility 視為百分比點差
+        return v - v0;
+    });
+}
+
+// 從後端抓取單一股票的歷史序列，回傳 { symbol, data: [{date, value}] }
+async function fetchHistorySeries(symbol, metric, period, asOf) {
+    const cacheKey = `${symbol}|${period}|${asOf||''}|${metric}`;
+    if (comparisonCache.has(cacheKey)) {
+        const cached = comparisonCache.get(cacheKey);
+        // 5 分鐘快取
+        if (Date.now() - cached.lastFetched < 5 * 60 * 1000) return cached.series;
+    }
+
+    const url = new URL(`${API_BASE_URL}/returns/${encodeURIComponent(symbol)}/history`);
+    url.searchParams.set('period', period);
+    if (asOf) url.searchParams.set('date', asOf);
+
+    const resp = await fetch(url.toString());
+    if (!resp.ok) throw new Error(`取得 ${symbol} 歷史失敗`);
+    const json = await resp.json();
+    if (!json.success) throw new Error(json.error || `歷史資料失敗: ${symbol}`);
+
+    const rows = Array.isArray(json.data) ? json.data : [];
+    // 嘗試映射欄位
+    const fieldMap = {
+        return: ['return', 'value'],
+        volume: ['volume'],
+        volatility: ['volatility']
+    };
+    const candidates = fieldMap[metric] || ['value'];
+    const pickValue = (r) => {
+        for (const k of candidates) {
+            if (k in r && r[k] != null) return parseFloat(r[k]);
+        }
+        return null;
+    };
+    const series = {
+        symbol,
+        data: rows.map(r => ({
+            date: r.date || r.trade_date || r.t || r.d,
+            value: pickValue(r)
+        })).filter(p => p.date)
+    };
+    comparisonCache.set(cacheKey, { lastFetched: Date.now(), series });
+    return series;
+}
+
+// 產生比較下拉清單（從目前排行榜資料）
+async function populateComparisonSelect() {
+    const sel = document.getElementById('comparisonSelect');
+    if (!sel) return;
+    const options = ['<option value="">從列表加入…</option>'];
+    try {
+        const url = new URL(`${API_BASE_URL}/stocks`);
+        url.searchParams.set('limit', '300');
+        const resp = await fetch(url.toString());
+        const json = await resp.json();
+        const list = (json && json.success && Array.isArray(json.data)) ? json.data : [];
+        list.forEach(s => {
+            const dn = s.short_name || s.name || '';
+            options.push(`<option value="${s.symbol}">${s.symbol} - ${dn}</option>`);
+            // 順便填快取，減少後續請求
+            const key = String(s.symbol).toUpperCase();
+            stockMetaCache.set(key, s);
+        });
+    } catch (e) {
+        console.warn('populateComparisonSelect fallback to currentData:', e);
+        (currentData || []).forEach(s => {
+            const dn = s.short_name || s.name || '';
+            options.push(`<option value="${s.symbol}">${s.symbol} - ${dn}</option>`);
+        });
+    }
+    sel.innerHTML = options.join('');
+}
+
+// 以 chip 形式呈現當前已選股票
+async function renderComparisonList() {
+    const wrap = document.getElementById('comparisonList');
+    const emptyEl = document.getElementById('comparisonEmpty');
+    if (!wrap) return;
+
+    if (!comparisonSelected || !comparisonSelected.length) {
+        wrap.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'flex';
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+    // 先渲染暫時內容，避免空白
+    wrap.innerHTML = comparisonSelected.slice(0,5).map(sym => `
+        <span class="chip" data-symbol="${sym}">
+            <span class="stock-symbol">${sym}</span>
+            <span class="stock-name">載入中…</span>
+            <span class="remove" onclick="removeComparisonSymbol('${sym}')" title="移除 ${sym}">✕</span>
+        </span>
+    `).join('');
+
+    try {
+        const metas = await Promise.all(comparisonSelected.slice(0,5).map(sym => fetchStockMeta(sym)));
+        const html = metas.map((meta, idx) => {
+            const sym = comparisonSelected[idx];
+            const name = meta ? (meta.short_name || meta.name || '未知') : '未知';
+            return `
+                <span class="chip" data-symbol="${sym}">
+                    <span class="stock-symbol">${sym}</span>
+                    <span class="stock-name">${name}</span>
+                    <span class="remove" onclick="removeComparisonSymbol('${sym}')" title="移除 ${sym}">✕</span>
+                </span>
+            `;
+        }).join('');
+        wrap.innerHTML = html;
+    } catch (_) { /* 忽略錯誤，保留暫時內容 */ }
+}
+
+// 將使用者輸入的代碼解析為完整代碼（含 .TW/.TWO），直接向後端查詢（不依賴 currentData）
+async function resolveFullSymbol(sym) {
+    const raw = String(sym || '').trim().toUpperCase();
+    if (!raw) return '';
+    // 若已含後綴，仍透過後端驗證並回傳正規化代碼
+    if (/^\d{4}\.(TW|TWO)$/.test(raw)) {
+        const meta = await fetchStockMeta(raw);
+        return (meta && meta.symbol) ? String(meta.symbol).toUpperCase() : raw;
+    }
+    // 構造候選（四碼嘗試 .TW/.TWO）
+    const candidates = /^\d{4}$/.test(raw) ? [`${raw}.TW`, `${raw}.TWO`] : [raw];
+    for (const c of candidates) {
+        const meta = await fetchStockMeta(c);
+        if (meta && meta.symbol) return String(meta.symbol).toUpperCase();
+    }
+    // 最後再嘗試原始輸入
+    const meta = await fetchStockMeta(raw);
+    if (meta && meta.symbol) return String(meta.symbol).toUpperCase();
+    // fallback：若是四碼，預設 .TW
+    if (/^\d{4}$/.test(raw)) return `${raw}.TW`;
+    return raw;
+}
+
+// 批次正規化目前清單
+async function ensureComparisonSymbolsNormalized() {
+    if (!Array.isArray(comparisonSelected) || comparisonSelected.length === 0) return;
+    const resolved = [];
+    for (const s of comparisonSelected.slice(0,5)) {
+        const full = await resolveFullSymbol(s);
+        if (full && !resolved.includes(full)) resolved.push(full);
+    }
+    comparisonSelected = resolved;
+    persistComparison();
+}
+
+// 加入一檔股票至比較清單（會自動解析成 .TW/.TWO）
+async function addComparisonSymbol(symRaw) {
+    let full = await resolveFullSymbol(symRaw);
+    if (!full) { showToast('請輸入有效的股票代碼', 'warning'); return; }
+    if (comparisonSelected.includes(full)) { showToast(`${full} 已在比較清單中`, 'warning'); return; }
+    if (comparisonSelected.length >= 5) { showToast('最多只能比較 5 檔股票', 'warning'); return; }
+
+    comparisonSelected.push(full);
+    persistComparison();
+    renderComparisonList();
+    updateComparisonChart();
+    updateComparisonTable();
+    try { await updateComparisonScatter(); } catch (_) {}
+    showToast(`已加入 ${full}`, 'success');
+
+    const input = document.getElementById('comparisonInput');
+    if (input) input.value = '';
+}
+
+// 從比較清單移除一檔股票
+function removeComparisonSymbol(sym) {
+    const idx = comparisonSelected.indexOf(sym);
+    if (idx > -1) {
+        comparisonSelected.splice(idx, 1);
+        persistComparison();
+        renderComparisonList();
+        updateComparisonChart();
+        updateComparisonTable();
+        try { updateComparisonScatter(); } catch (_) {}
+        showToast(`已移除 ${sym}`, 'success');
+    }
+}
+
+        let isRenderingComparison = false;
+        function rollingStd(arr, win = 20) {
+            const res = new Array(arr.length).fill(null);
+            let buf = [];
+            for (let i = 0; i < arr.length; i++) {
+                const v = arr[i];
+                if (v !== null && isFinite(v)) buf.push(v);
+                if (buf.length > win) buf.shift();
+                if (buf.length === win) {
+                    const mean = buf.reduce((s, x) => s + x, 0) / win;
+                    const variance = buf.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / win;
+                    res[i] = Math.sqrt(variance);
+                }
+            }
+            return res;
+        }
+        async function updateComparisonChart() {
+    const canvas = document.getElementById('comparisonChartCanvas');
+    const emptyEl = document.getElementById('chartEmpty');
+    const statusEl = document.getElementById('comparisonStatus');
+    const statusText = document.getElementById('comparisonStatusText');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const metric = document.getElementById('comparisonMetric')?.value || 'return';
+    const normalize = document.getElementById('comparisonNormalize')?.checked || false;
+    const period = document.querySelector('.period-btn.active')?.dataset.period || 'daily';
+    const asOf = getSelectedDate();
+
+    if (!comparisonSelected || !comparisonSelected.length) {
+        canvas.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'flex';
+        if (statusEl) statusEl.style.display = 'none';
+        return;
+    }
+
+    if (isRenderingComparison) return; // 避免重入
+    isRenderingComparison = true;
+    canvas.style.display = 'block';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (statusEl) { statusEl.style.display = 'inline-flex'; statusText.textContent = '載入中…'; }
+
+    try {
+        // 並行抓取所有選擇股票的歷史（帶備援）
+        const promises = comparisonSelected.slice(0,5).map(sym => fetchSeriesWithFallback(sym, metric, period, asOf));
+        const series = await Promise.all(promises);
+        const { dates, aligned } = alignTimeSeries(series);
+
+        // 若無資料，顯示空狀態並結束
+        const hasAny = dates && dates.length > 0 && aligned && aligned.some(s => (s.values || []).some(v => v !== null && isFinite(v)));
+        if (!hasAny) {
+            const existing = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+            if (existing) existing.destroy();
+            if (comparisonChart) { try { comparisonChart.destroy(); } catch(_){} comparisonChart = null; }
+            if (emptyEl) emptyEl.style.display = 'flex';
+            if (statusEl) statusEl.style.display = 'none';
+            isRenderingComparison = false;
+            return;
+        }
+
+        // 調色盤（色盲友善）
+        const palette = ['#00d4ff', '#22c55e', '#f59e0b', '#ef4444', '#a855f7'];
+
+        // 先計算所有資料序列（含轉換/基準化），稍後用 keep mask 過濾全空點
+        const computed = aligned.map((s, idx) => {
+            let vals = (s.values || []).map(v => (v == null || !isFinite(v) ? null : Number(v)));
+            if (metric === 'volatility') {
+                vals = rollingStd(vals, 20);
+            }
+            vals = normalize ? normalizeSeries(vals, metric) : vals;
+            return { symbol: s.symbol, vals };
+        });
+
+        // 建立 keep mask：至少有一個序列在該索引為有限數
+        const keep = (dates || []).map((_, i) => computed.some(c => c.vals[i] != null && isFinite(c.vals[i])));
+        // 過濾 labels 與 datasets 的 data；label 統一字串化
+        const filteredLabels = (dates || []).filter((_, i) => keep[i]).map(d => String(d));
+        let datasets = computed.map((c, idx) => {
+            const color = palette[idx % palette.length];
+            const data = c.vals.filter((_, i) => keep[i]).map(v => (v == null || !isFinite(v) ? null : Number(v)));
+            return {
+                label: c.symbol,
+                data,
+                borderColor: color,
+                backgroundColor: color + '33',
+                spanGaps: true,
+                fill: false,
+                tension: 0.2,
+                pointRadius: 0,
+                borderWidth: 2,
+            };
+        });
+
+        // 僅保留至少存在一個有限值的資料集
+        datasets = datasets.filter(ds => (ds.data || []).some(v => v != null && isFinite(v)));
+
+        // 若過濾後完全沒有點，顯示空狀態
+        const hasAnyAfterFilter = filteredLabels.length > 0 && datasets.some(ds => (ds.data || []).some(v => v != null && isFinite(v)));
+        if (!hasAnyAfterFilter) {
+            const existing2 = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+            if (existing2) existing2.destroy();
+            if (comparisonChart) { try { comparisonChart.destroy(); } catch(_){} comparisonChart = null; }
+            if (emptyEl) emptyEl.style.display = 'flex';
+            if (statusEl) statusEl.style.display = 'none';
+            isRenderingComparison = false;
+            return;
+        }
+
+        // 確保舊的圖表被正確銷毀（避免 Canvas is already in use）
+        const existing = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+        if (existing) existing.destroy();
+        if (comparisonChart) { try { comparisonChart.destroy(); } catch(_){} comparisonChart = null; }
+        try {
+        // 診斷輸出（前 5 筆）
+        console.debug('[comparison] labels len', filteredLabels.length, 'datasets', datasets.map(d=>({label:d.label,len:d.data.length,head:d.data.slice(0,5)})));
+        comparisonChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [...filteredLabels], datasets: datasets.map(d=>({...d, data: [...d.data]})) },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                parsing: false,
+                plugins: {
+                    legend: {
+                        labels: { color: 'var(--text-primary)' }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0,0,0,0.85)',
+                        borderColor: 'var(--border-secondary)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (ctx) => {
+                                const v = ctx.parsed.y;
+                                if (!isFinite(v)) return `${ctx.dataset.label}: -`;
+                                if (metric === 'volume') return `${ctx.dataset.label}: ${Math.round(v).toLocaleString()}`;
+                                return `${ctx.dataset.label}: ${v.toFixed(2)}%`;
+                            },
+                            title: (items) => items?.[0]?.label || ''
+                        }
+                    },
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x'
+                        },
+                        pan: { enabled: true, mode: 'x' },
+                        limits: { x: { minRange: 5 } }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: { color: 'var(--text-secondary)' },
+                        grid: { color: 'var(--border-secondary)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        ticks: {
+                            color: 'var(--text-secondary)',
+                            callback: (v) => metric === 'volume' ? Number(v).toLocaleString() : `${v}%`
+                        },
+                        grid: { color: 'var(--border-secondary)' }
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' }
+            }
+        });
+        } catch (err) {
+            console.error('Chart 建立失敗，回退空狀態:', err);
+            const existing3 = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+            if (existing3) existing3.destroy();
+            if (comparisonChart) { try { comparisonChart.destroy(); } catch(_){} comparisonChart = null; }
+            if (emptyEl) emptyEl.style.display = 'flex';
+            if (statusEl) statusEl.style.display = 'none';
+            isRenderingComparison = false;
+            return;
+        }
+        if (statusEl) { statusEl.style.display = 'inline-flex'; statusText.textContent = '完成'; setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 800); }
+    } catch (e) {
+        console.error('更新比較圖失敗:', e);
+        if (statusEl) { statusEl.style.display = 'inline-flex'; statusText.textContent = '載入失敗'; }
+        showToast('比較圖載入失敗', 'error');
+    }
+    isRenderingComparison = false;
+}
+
+        async function updateComparisonTable() {
+            const tbody = document.getElementById('comparisonTableBody');
+            const emptyEl = document.getElementById('tableEmpty');
+            if (!tbody) return;
+
+            if (!comparisonSelected || !comparisonSelected.length) {
+                tbody.innerHTML = '';
+                if (emptyEl) emptyEl.style.display = 'table-row';
+                return;
+            }
+
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            const slice = comparisonSelected.slice(0,5);
+            const metas = await Promise.all(slice.map(sym => fetchStockMeta(sym)));
+
+            // 取用目前選擇的期間與實際資料日
+            const period = document.querySelector('.period-btn.active')?.dataset.period || 'daily';
+            const asOf = (typeof apiStatus !== 'undefined') ? apiStatus.asOfDate : undefined;
+
+            // 並行抓取每檔歷史（用直接 API 以取得 volume 欄位）
+            const histories = await Promise.all(slice.map(async (sym) => {
+                try {
+                    const url = new URL(`${API_BASE_URL}/returns/${encodeURIComponent(sym)}/history`);
+                    url.searchParams.set('period', period);
+                    if (asOf) url.searchParams.set('date', asOf);
+                    const resp = await fetch(url.toString());
+                    if (!resp.ok) return [];
+                    const json = await resp.json();
+                    return Array.isArray(json.data) ? json.data : [];
+                } catch (_) { return []; }
+            }));
+
+            // 並行抓取最新股價
+            const prices = await Promise.all(slice.map(sym => fetchLatestPrice(sym)));
+
+            const rows = slice.map((sym, idx) => {
+                const meta = metas[idx];
+                const history = histories[idx] || [];
+                const name = meta ? (meta.short_name || meta.name || '未知') : '未知';
+                const market = meta ? (meta.market || '') : '';
+                // 末筆報酬與成交量
+                let lastReturn = 0, lastVolume = 0, volatility = 0;
+                if (history.length) {
+                    const last = history[history.length - 1];
+                    lastReturn = Number(last.return || 0);
+                    lastVolume = Number(last.volume || 0);
+                    // 近 20 筆報酬標準差
+                    const tail = history.map(r => Number(r.return)).filter(v => isFinite(v)).slice(-20);
+                    if (tail.length >= 2) {
+                        const mean = tail.reduce((a,b)=>a+b,0)/tail.length;
+                        const varc = tail.reduce((a,b)=>a + Math.pow(b-mean,2), 0) / (tail.length - 1);
+                        volatility = Math.sqrt(varc);
+                    }
+                }
+
+                const price = prices[idx] != null ? Number(prices[idx]) : 0;
+                return `
+                    <tr>
+                        <td><span class="stock-symbol">${sym}</span></td>
+                        <td style="text-align:left">${name}</td>
+                        <td style="text-align:right; ${lastReturn >= 0 ? 'color:var(--success)' : 'color:var(--error)'}">${lastReturn.toFixed(2)}%</td>
+                        <td style="text-align:right">${price ? price.toFixed(2) : '-'}</td>
+                        <td style="text-align:right">${lastVolume.toLocaleString()}</td>
+                        <td style="text-align:right">${volatility.toFixed(2)}</td>
+                        <td style="text-align:center">${market}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = rows.join('');
+            // 渲染完表格後，若尚未繪圖或資料變更，刷新趨勢圖
+            try { await updateComparisonChart(); } catch (_) {}
+            try { await updateComparisonScatter(); } catch (_) {}
+        }
+
+        async function updateComparisonScatter() {
+            const canvas = document.getElementById('comparisonScatter');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const yKey = document.getElementById('comparisonScatterY')?.value || 'volume';
+            const period = document.querySelector('.period-btn.active')?.dataset.period || 'daily';
+            const asOf = (typeof apiStatus !== 'undefined') ? apiStatus.asOfDate : undefined;
+
+            if (!comparisonSelected || comparisonSelected.length === 0) {
+                const existing = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+                if (existing) existing.destroy();
+                comparisonScatterChart = null;
+                return;
+            }
+
+            // 取得末筆報酬、量、近 20 筆波動，以及市場別
+            const slice = comparisonSelected.slice(0,5);
+            const metas = await Promise.all(slice.map(sym => fetchStockMeta(sym)));
+            const histories = await Promise.all(slice.map(async (sym) => {
+                try {
+                    const url = new URL(`${API_BASE_URL}/returns/${encodeURIComponent(sym)}/history`);
+                    url.searchParams.set('period', period);
+                    if (asOf) url.searchParams.set('date', asOf);
+                    const resp = await fetch(url.toString());
+                    if (!resp.ok) return [];
+                    const json = await resp.json();
+                    return Array.isArray(json.data) ? json.data : [];
+                } catch (_) { return []; }
+            }));
+
+            const pointsListed = [];
+            const pointsOTC = [];
+            for (let idx = 0; idx < slice.length; idx++) {
+                const sym = slice[idx];
+                const meta = metas[idx];
+                const history = histories[idx] || [];
+                if (!history.length) continue;
+                const last = history[history.length - 1];
+                const lastReturn = Number(last.return || 0);
+                const lastVolume = Number(last.volume || 0);
+                const cd = (currentData || []).find(x => String(x.symbol).toUpperCase() === String(sym).toUpperCase());
+                const priceFromCurrent = cd && isFinite(cd.price) ? Number(cd.price) : null;
+                const priceFromHistory = (last && (last.price != null ? Number(last.price) : (last.close != null ? Number(last.close) : null)));
+                let lastPrice = isFinite(priceFromCurrent) ? priceFromCurrent : (isFinite(priceFromHistory) ? priceFromHistory : null);
+                if (yKey === 'price' && (lastPrice == null || !isFinite(lastPrice))) {
+                    // 以價格 API 備援
+                    lastPrice = await fetchLatestPrice(sym);
+                }
+                const tail = history.map(r => Number(r.return)).filter(v => isFinite(v)).slice(-20);
+                let volatility = 0;
+                if (tail.length >= 2) {
+                    const mean = tail.reduce((a,b)=>a+b,0)/tail.length;
+                    const varc = tail.reduce((a,b)=>a + Math.pow(b-mean,2), 0) / (tail.length - 1);
+                    volatility = Math.sqrt(varc);
+                }
+                const yVal = yKey === 'volatility' ? volatility : (yKey === 'price' ? lastPrice : lastVolume);
+                if (yVal != null && isFinite(yVal)) {
+                    const point = { x: lastReturn, y: yVal, symbol: sym, name: meta ? (meta.short_name || meta.name || '') : '', market: meta?.market || '' };
+                    const isOTC = /TWO|OTC/i.test(point.market || sym);
+                    (isOTC ? pointsOTC : pointsListed).push(point);
+                }
+            }
+
+            const allPoints = [...pointsListed, ...pointsOTC];
+            const ds = [];
+            if (pointsListed.length) ds.push({
+                label: '上市',
+                data: pointsListed.map(p => ({ x: p.x, y: p.y, symbol: p.symbol, name: p.name, market: p.market })),
+                pointBackgroundColor: '#00d4ff',
+                pointBorderColor: '#00d4ff',
+                showLine: false,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+            });
+            if (pointsOTC.length) ds.push({
+                label: '上櫃',
+                data: pointsOTC.map(p => ({ x: p.x, y: p.y, symbol: p.symbol, name: p.name, market: p.market })),
+                pointBackgroundColor: '#f59e0b',
+                pointBorderColor: '#f59e0b',
+                showLine: false,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+            });
+
+            // 銷毀舊圖
+            const existing = (window.Chart && window.Chart.getChart) ? Chart.getChart(canvas) : null;
+            if (existing) existing.destroy();
+            if (comparisonScatterChart) { try { comparisonScatterChart.destroy(); } catch(_){} comparisonScatterChart = null; }
+
+            const yMin = yKey === 'price' && allPoints.length ? Math.min(...allPoints.map(p => p.y)) : undefined;
+            const yMax = yKey === 'price' && allPoints.length ? Math.max(...allPoints.map(p => p.y)) : undefined;
+            const yPadding = (yKey === 'price' && isFinite(yMin) && isFinite(yMax)) ? Math.max(1, (yMax - yMin) * 0.08) : 0;
+            comparisonScatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets: ds },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 450, easing: 'easeOutQuart' },
+                    layout: { padding: 10 },
+                    elements: {
+                        point: {
+                            borderWidth: 1.5,
+                            hitRadius: 10,
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', align: 'end', labels: { color: '#8bd7ff', font: { weight: '600' } } },
+                        tooltip: {
+                            enabled: false,
+                            external: (context) => {
+                                const { chart, tooltip } = context;
+                                let el = document.getElementById('scatterTooltip');
+                                if (!el) {
+                                    el = document.createElement('div');
+                                    el.id = 'scatterTooltip';
+                                    el.style.position = 'fixed';
+                                    el.style.pointerEvents = 'none';
+                                    el.style.zIndex = '2000';
+                                    el.style.background = 'rgba(10,12,22,0.95)';
+                                    el.style.border = '1px solid rgba(0,212,255,0.35)';
+                                    el.style.boxShadow = '0 0 12px rgba(0,212,255,0.25), inset 0 0 8px rgba(0,212,255,0.15)';
+                                    el.style.borderRadius = '10px';
+                                    el.style.padding = '10px 12px';
+                                    el.style.color = '#e6f7ff';
+                                    el.style.transform = 'translate(-50%, calc(-100% - 12px))';
+                                    el.style.backdropFilter = 'blur(6px)';
+                                    document.body.appendChild(el);
+                                }
+                                if (tooltip.opacity === 0) { el.style.opacity = '0'; return; }
+                                const dp = tooltip.dataPoints?.[0];
+                                if (!dp) { el.style.opacity = '0'; return; }
+                                const raw = dp.raw || {};
+                                let yLabel;
+                                if (yKey === 'volatility') yLabel = `${Number(raw.y).toFixed(2)}%`;
+                                else if (yKey === 'price') yLabel = `${Number(raw.y).toFixed(2)}`;
+                                else yLabel = `${Math.round(Number(raw.y)).toLocaleString()}`;
+                                el.innerHTML = `
+                                    <div style="font-weight:700;color:#00d4ff;letter-spacing:.3px;">${raw.symbol || ''} <span style="opacity:.85;">${raw.name || ''}</span></div>
+                                    <div style="font-size:12px;color:#8bd7ff;">回報: ${Number(raw.x).toFixed(2)}%</div>
+                                    <div style="font-size:12px;color:#8bd7ff;">${yKey==='volatility'?'波動':(yKey==='price'?'股價':'成交量')}: ${yLabel}</div>
+                                `;
+                                const canvasRect = chart.canvas.getBoundingClientRect();
+                                el.style.left = `${canvasRect.left + tooltip.caretX}px`;
+                                el.style.top = `${canvasRect.top + tooltip.caretY}px`;
+                                el.style.opacity = '1';
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { 
+                                display: true, 
+                                text: '報酬率 (%)', 
+                                color: '#00d4ff', 
+                                font: { weight: '700', size: 13 } 
+                            },
+                            ticks: { 
+                                color: '#8bd7ff',
+                                font: { weight: '500' }
+                            },
+                            grid: { 
+                                color: 'rgba(0, 212, 255, 0.15)', 
+                                borderDash: [4, 4],
+                                borderWidth: 1
+                            },
+                            border: {
+                                color: 'rgba(0, 212, 255, 0.4)',
+                                width: 1.5
+                            }
+                        },
+                        y: {
+                            title: { 
+                                display: true, 
+                                text: yKey === 'volatility' ? '波動 (%)' : (yKey === 'price' ? '股價' : '成交量'), 
+                                color: '#00d4ff', 
+                                font: { weight: '700', size: 13 } 
+                            },
+                            ticks: {
+                                color: '#8bd7ff',
+                                font: { weight: '500' },
+                                callback: (v) => yKey === 'volatility' ? `${v}%` : (yKey === 'price' ? Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : Number(v).toLocaleString())
+                            },
+                            grid: { 
+                                color: 'rgba(0, 212, 255, 0.15)', 
+                                borderDash: [4, 4],
+                                borderWidth: 1
+                            },
+                            border: {
+                                color: 'rgba(0, 212, 255, 0.4)',
+                                width: 1.5
+                            },
+                            suggestedMin: (yKey === 'price' && isFinite(yMin)) ? (yMin - yPadding) : undefined,
+                            suggestedMax: (yKey === 'price' && isFinite(yMax)) ? (yMax + yPadding) : undefined
+                        }
+                    },
+                    onClick: (evt, elements, chart) => {
+                        const hits = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
+                        if (!hits || !hits.length) return;
+                        const e = hits[0];
+                        const raw = chart.data.datasets[e.datasetIndex].data[e.index];
+                        if (!raw || !raw.symbol) return;
+                        const sym = String(raw.symbol).toUpperCase();
+                        // 嘗試開啟 Yahoo Finance
+                        const url = `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}`;
+                        window.open(url, '_blank');
+                    }
+                }
+            });
+        }
+
+        function exportComparisonData() {
+            if (!comparisonSelected || !comparisonSelected.length) {
+                showToast('沒有數據可以匯出', 'warning');
+                return;
+            }
+
+            const data = comparisonSelected.map(sym => {
+                const s = (currentData || []).find(x => String(x.symbol).toUpperCase() === String(sym).toUpperCase()) || {
+                    symbol: sym, name: '', return: 0, volume: 0, volatility: 0, market: '未知'
+                };
+                return [s.symbol, s.name, s.return, s.volume, s.volatility, s.market];
+            });
+
+            const csv = [
+                ['股票代碼', '股票名稱', '報酬率', '成交量', '波動', '市場'].join(','),
+                ...data.map(row => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `股票比較_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showToast('比較數據已匯出', 'success');
+        }
+
+        function exportAlertsData() {
+            if (!alertInbox || !alertInbox.length) {
+                showToast('沒有警示記錄可以匯出', 'warning');
+                return;
+            }
+
+            const csv = [
+                ['股票代碼', '警示訊息', '觸發時間'].join(','),
+                ...alertInbox.map(item => [
+                    item.symbol,
+                    item.message,
+                    new Date(item.time).toLocaleString()
+                ].map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `警示記錄_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showToast('警示記錄已匯出', 'success');
+        }
+
+        // ========= 警示設定功能 =========
+        function initAlertsUI() {
+            loadAlertRules();
+            loadAlertInbox();
+            const toggle = document.getElementById('desktopNotifyToggle');
+            try { desktopNotifyEnabled = JSON.parse(localStorage.getItem('quantgems.desktopNotify') || 'false'); } catch (_) { desktopNotifyEnabled = false; }
+            if (toggle) toggle.checked = !!desktopNotifyEnabled;
+        }
+        function onDesktopToggleChange(e) {
+            desktopNotifyEnabled = !!e.target.checked;
+            localStorage.setItem('quantgems.desktopNotify', JSON.stringify(desktopNotifyEnabled));
+            if (desktopNotifyEnabled && 'Notification' in window) {
+                Notification.requestPermission().then((perm) => {
+                    if (perm !== 'granted') {
+                        desktopNotifyEnabled = false;
+                        localStorage.setItem('quantgems.desktopNotify', 'false');
+                        const t = document.getElementById('desktopNotifyToggle'); if (t) t.checked = false;
+                    }
+                });
+            }
+        }
+        function ruleToText(r) {
+            const sym = r.symbol ? r.symbol : '全部';
+            const metric = { return: '報酬率', volume: '成交量', volatility: '波動' }[r.type] || r.type;
+            return `${sym} · ${metric} ${r.op} ${r.threshold}`;
+        }
+        function loadAlertRules() {
+            try { alertRules = JSON.parse(localStorage.getItem('quantgems.alertRules') || '[]'); } catch (_) { alertRules = []; }
+        }
+        function saveAlertRules() {
+            localStorage.setItem('quantgems.alertRules', JSON.stringify(alertRules || []));
+        }
+        function loadAlertInbox() {
+            try { alertInbox = JSON.parse(localStorage.getItem('quantgems.alertInbox') || '[]'); } catch (_) { alertInbox = []; }
+        }
+        function saveAlertInbox() {
+            localStorage.setItem('quantgems.alertInbox', JSON.stringify(alertInbox || []));
+        }
+        function renderAlertRules() {
+            const tbody = document.getElementById('alertRulesBody');
+            const emptyEl = document.getElementById('rulesEmpty');
+            if (!tbody) return;
+
+            if (!alertRules || !alertRules.length) {
+                tbody.innerHTML = '';
+                if (emptyEl) emptyEl.style.display = 'table-row';
+                return;
+            }
+
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            tbody.innerHTML = alertRules.map(r => {
+                const sym = r.symbol ? r.symbol : '全部股票';
+                const metric = { return: '報酬率', volume: '成交量', volatility: '波動' }[r.type] || r.type;
+                return `
+                    <tr>
+                        <td>
+                            <div class="rule-condition">
+                                <span class="alert-symbol">${sym}</span> · ${metric} ${r.op} ${r.threshold}
+                            </div>
+                            <small class="form-hint">建立時間: ${new Date(r.createdAt).toLocaleString()}</small>
+                        </td>
+                        <td>
+                            <button class="btn-icon" onclick="deleteAlertRule('${r.id}')" title="刪除規則">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function addAlertRule() {
+            const sym = (document.getElementById('alertSymbolInput')?.value || '').trim().toUpperCase();
+            const type = document.getElementById('alertTypeSelect')?.value || 'return';
+            const op = document.getElementById('alertOperatorSelect')?.value || '>=';
+            const thrRaw = document.getElementById('alertThresholdInput')?.value || '';
+            const thr = parseFloat(thrRaw);
+
+            if (!isFinite(thr)) {
+                showToast('請輸入有效的閾值', 'error');
+                return;
+            }
+
+            if (alertRules.length >= 10) {
+                showToast('最多只能設定 10 個警示規則', 'warning');
+                return;
+            }
+
+            const rule = {
+                id: String(Date.now()) + Math.random().toString(36).slice(2),
+                symbol: sym || '',
+                type,
+                op,
+                threshold: thr,
+                createdAt: new Date().toISOString()
+            };
+
+            alertRules.push(rule);
+            saveAlertRules();
+            renderAlertRules();
+
+            // 清空表單
+            if (document.getElementById('alertSymbolInput')) document.getElementById('alertSymbolInput').value = '';
+            if (document.getElementById('alertThresholdInput')) document.getElementById('alertThresholdInput').value = '';
+
+            showToast('警示規則已新增', 'success');
+        }
+
+        function deleteAlertRule(id) {
+            const index = alertRules.findIndex(r => r.id === id);
+            if (index > -1) {
+                const rule = alertRules[index];
+                alertRules.splice(index, 1);
+                saveAlertRules();
+                renderAlertRules();
+                showToast('警示規則已刪除', 'success');
+            }
+        }
+
+        function renderAlertsInbox() {
+            const box = document.getElementById('alertsInbox');
+            const emptyEl = document.getElementById('inboxEmpty');
+            if (!box) return;
+
+            if (!alertInbox || !alertInbox.length) {
+                box.innerHTML = '';
+                if (emptyEl) emptyEl.style.display = 'flex';
+                return;
+            }
+
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            box.innerHTML = alertInbox.slice(-100).reverse().map((it, index) => `
+                <div class="inbox-item" data-index="${index}">
+                    <div>
+                        <div><strong class="alert-symbol">${it.symbol}</strong> · <span class="alert-message">${it.message}</span></div>
+                        <div class="time">${new Date(it.time).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <button class="btn-icon" onclick="removeAlertItem(${index})" title="刪除此項">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function removeAlertItem(index) {
+            if (index >= 0 && index < alertInbox.length) {
+                alertInbox.splice(alertInbox.length - 1 - index, 1);
+                saveAlertInbox();
+                renderAlertsInbox();
+                showToast('警示項目已刪除', 'success');
+            }
+        }
+
+        function evaluateAlerts() {
+            loadAlertRules();
+            if (!alertRules || !alertRules.length) return;
+            const stocks = currentData || [];
+            const todayKey = (d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)(new Date());
+            let history;
+            try { history = JSON.parse(localStorage.getItem('quantgems.alertHistory') || '{}'); } catch (_) { history = {}; }
+            const saveHistory = () => localStorage.setItem('quantgems.alertHistory', JSON.stringify(history));
+            alertRules.forEach(rule => {
+                const targets = rule.symbol ? stocks.filter(s => String(s.symbol).toUpperCase() === rule.symbol) : stocks;
+                targets.forEach(s => {
+                    let v;
+                    if (rule.type === 'volume') v = Number(s.volume || 0);
+                    else if (rule.type === 'volatility') v = Number(s.volatility || 0);
+                    else v = Number(s.return || 0); // default: return
+                    let ok = false;
+                    if (rule.op === '>=') ok = v >= rule.threshold;
+                    else if (rule.op === '<=') ok = v <= rule.threshold;
+                    if (ok) {
+                        const key = `${todayKey}|${rule.id}|${s.symbol}`;
+                        if (!history[key]) {
+                            history[key] = true;
+                            const unit = rule.type === 'return' ? '%' : (rule.type === 'volatility' ? '' : '');
+                            const msg = `${rule.type} ${rule.op} ${rule.threshold}${unit} 命中（目前 ${v.toFixed(2)}${unit}）`;
+                            alertInbox.push({ symbol: s.symbol, message: msg, time: new Date().toISOString() });
+                            saveAlertInbox();
+                            renderAlertsInbox();
+                            if (desktopNotifyEnabled && 'Notification' in window && Notification.permission === 'granted') {
+                                try { new Notification(`${s.symbol} 警示`, { body: msg }); } catch (_) {}
+                            }
+                        }
+                    }
+                });
+            });
+            saveHistory();
         }
 
         // ========= 卡片交互：設定熱力圖篩選與高亮 =========

@@ -74,9 +74,10 @@ router.get('/rankings', async (req, res) => {
       )
       SELECT 
         sr.symbol,
-        COALESCE(s.name, sr.symbol) AS name,
+        COALESCE(s.short_name, s.name, sr.symbol) AS name,
+        s.short_name AS short_name,
         COALESCE(s.market, CASE WHEN sr.symbol LIKE '%.TWO' THEN 'otc' ELSE 'listed' END) AS market,
-        NULL::text AS industry,
+        COALESCE(s.industry, NULL)::text AS industry,
         (
           CASE 
             WHEN :period = 'daily' THEN sr.daily_return
@@ -412,22 +413,56 @@ router.get('/statistics', async (req, res) => {
 router.get('/:symbol/history', async (req, res) => {
   try {
     const { symbol } = req.params;
-    const { startDate, endDate, limit = 30 } = req.query;
-    
-    const whereClause = { symbol };
-    if (startDate) whereClause.date = { [Op.gte]: startDate };
-    if (endDate) whereClause.date = { ...whereClause.date, [Op.lte]: endDate };
+    const { period = 'daily', date, limit = 180 } = req.query;
 
-    const returns = await ReturnCalculation.findAll({
-      where: whereClause,
-      limit: parseInt(limit),
-      order: [['date', 'DESC']]
+    // 選擇對應的回報欄位
+    let returnField = 'daily_return';
+    switch ((period || '').toLowerCase()) {
+      case 'weekly': returnField = 'weekly_return'; break;
+      case 'monthly': returnField = 'monthly_return'; break;
+      case 'quarterly': returnField = 'quarterly_return'; break;
+      case 'yearly': returnField = 'yearly_return'; break;
+      default: returnField = 'daily_return';
+    }
+
+    // 取得該股票於選擇日期（或最近可用日）的前 N 筆資料
+    const q = `
+      WITH latest AS (
+        SELECT CASE 
+          WHEN :date::date IS NULL THEN (SELECT MAX(date) FROM stock_returns WHERE symbol = :symbol)
+          ELSE (SELECT MAX(date) FROM stock_returns WHERE symbol = :symbol AND date::date <= :date::date)
+        END AS dt
+      ),
+      lastn AS (
+        SELECT sr.date, sr.${returnField} AS ret, sp.volume
+        FROM stock_returns sr
+        LEFT JOIN stock_prices sp ON sp.symbol = sr.symbol AND sp.date = sr.date
+        , latest
+        WHERE sr.symbol = :symbol AND sr.date::date <= latest.dt::date
+        ORDER BY sr.date DESC
+        LIMIT :limit
+      )
+      SELECT date, ret, volume
+      FROM lastn
+      ORDER BY date ASC
+    `;
+
+    const rows = await sequelize.query(q, {
+      type: QueryTypes.SELECT,
+      replacements: { symbol, date: date || null, limit: Math.max(1, parseInt(limit)) }
     });
 
-    res.json({ success: true, data: returns });
+    // 正規化單位為百分比，並輸出前端易用格式
+    const data = rows.map(r => ({
+      date: r.date,
+      return: toPercentUnit(r.ret),
+      volume: r.volume == null ? null : parseInt(r.volume)
+    }));
+
+    return res.json({ success: true, data, period });
   } catch (error) {
     console.error('獲取報酬率歷史錯誤:', error);
-    res.status(500).json({ success: false, error: '獲取報酬率歷史失敗' });
+    res.status(500).json({ success: false, error: '獲取報酬率歷史失敗', message: error.message });
   }
 });
 

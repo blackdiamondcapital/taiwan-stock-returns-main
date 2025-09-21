@@ -20,9 +20,16 @@ router.get('/', async (req, res) => {
       order: [['symbol', 'ASC']]
     });
 
+    // Map name to short_name if available
+    const mapped = stocks.rows.map(s => {
+      const obj = s.toJSON();
+      obj.name = obj.short_name || obj.name;
+      return obj;
+    });
+
     res.json({
       success: true,
-      data: stocks.rows,
+      data: mapped,
       total: stocks.count,
       pagination: {
         limit: parseInt(limit),
@@ -41,29 +48,57 @@ router.get('/:symbol', async (req, res) => {
   try {
     const { symbol } = req.params;
     
-    const stock = await Stock.findOne({
-      where: { symbol },
-      include: [
-        {
-          model: PriceHistory,
-          as: 'priceHistory',
-          limit: 30,
-          order: [['date', 'DESC']]
-        },
-        {
-          model: ReturnCalculation,
-          as: 'returns',
-          limit: 1,
-          order: [['date', 'DESC']]
-        }
-      ]
-    });
+    // 建立候選清單：支援純四碼自動補 .TW/.TWO
+    const candidates = [];
+    if (/^\d{4}$/.test(symbol)) {
+      candidates.push(`${symbol}.TW`, `${symbol}.TWO`);
+    } else {
+      candidates.push(symbol);
+    }
+    console.log(`[stocks/:symbol] query symbol="${symbol}", candidates=`, candidates);
 
-    if (!stock) {
-      return res.status(404).json({ success: false, error: '股票不存在' });
+    // 先嘗試從 stock_symbols 撈完整資訊
+    for (const sym of candidates) {
+      console.log(`[stocks/:symbol] try Stock.findOne for`, sym);
+      const stock = await Stock.findOne({
+        where: { symbol: sym },
+        include: [
+          {
+            model: PriceHistory,
+            as: 'priceHistory',
+            limit: 30,
+            order: [['date', 'DESC']]
+          },
+          {
+            model: ReturnCalculation,
+            as: 'returns',
+            attributes: ['symbol','date','dailyReturn','weeklyReturn','monthlyReturn','quarterlyReturn','yearlyReturn','cumulativeReturn'],
+            limit: 1,
+            order: [['date', 'DESC']]
+          }
+        ]
+      });
+      if (stock) {
+        const obj = stock.toJSON();
+        obj.name = obj.short_name || obj.name;
+        return res.json({ success: true, data: obj });
+      }
     }
 
-    res.json({ success: true, data: stock });
+    // 若 symbols 表沒有，但 returns 或 prices 有資料，回傳最小資訊避免 404
+    for (const sym of candidates) {
+      const [rcCnt, phCnt] = await Promise.all([
+        ReturnCalculation.count({ where: { symbol: sym } }),
+        PriceHistory.count({ where: { symbol: sym } })
+      ]);
+      console.log(`[stocks/:symbol] counts for`, sym, `returns=`, rcCnt, `prices=`, phCnt);
+      if ((rcCnt || 0) > 0 || (phCnt || 0) > 0) {
+        return res.json({ success: true, data: { symbol: sym, name: sym } });
+      }
+    }
+
+    // 都找不到才回 404
+    return res.status(404).json({ success: false, error: '股票不存在' });
   } catch (error) {
     console.error('獲取股票詳情錯誤:', error);
     res.status(500).json({ success: false, error: '獲取股票詳情失敗' });
